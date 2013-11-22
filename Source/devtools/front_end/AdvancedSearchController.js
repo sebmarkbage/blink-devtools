@@ -38,7 +38,7 @@ WebInspector.AdvancedSearchController = function()
     WebInspector.settings.advancedSearchConfig = WebInspector.settings.createSetting("advancedSearchConfig", new WebInspector.SearchConfig("", true, false));
     
     WebInspector.resourceTreeModel.addEventListener(WebInspector.ResourceTreeModel.EventTypes.FrameNavigated, this._frameNavigated, this);
-    WebInspector.registerViewInDrawer("search", WebInspector.UIString("Search"), this);
+    WebInspector.inspectorView.registerViewInDrawer("search", WebInspector.UIString("Search"), this);
 }
 
 /**
@@ -75,7 +75,7 @@ WebInspector.AdvancedSearchController.prototype = {
                 WebInspector.showPanel("sources");
                 this.show();
             } else
-                WebInspector.closeDrawer();
+                WebInspector.inspectorView.closeDrawer();
             event.consume(true);
             return true;
         }
@@ -103,12 +103,12 @@ WebInspector.AdvancedSearchController.prototype = {
         if (selection.rangeCount)
             queryCandidate = selection.toString().replace(/\r?\n.*/, "");
 
-        if (this._searchView && this._searchView.isShowing())
-            this._searchView.focus();
-        else
-            WebInspector.showViewInDrawer("search");
+        if (!this._searchView || !this._searchView.isShowing())
+            WebInspector.inspectorView.showViewInDrawer("search");
         if (queryCandidate)
             this._searchView._search.value = queryCandidate;
+        this._searchView.focus();
+
         this.startIndexing();
     },
 
@@ -230,7 +230,7 @@ WebInspector.SearchView = function(controller)
 
     this._controller = controller;
 
-    this.element.className = "search-view";
+    this.element.className = "search-view vbox";
 
     this._searchPanelElement = this.element.createChild("div", "search-drawer-header");
     this._searchPanelElement.addEventListener("keydown", this._onKeyDown.bind(this), false);
@@ -238,10 +238,9 @@ WebInspector.SearchView = function(controller)
     this._searchResultsElement = this.element.createChild("div");
     this._searchResultsElement.className = "search-results";
     
-    this._searchLabel = this._searchPanelElement.createChild("span");
-    this._searchLabel.textContent = WebInspector.UIString("Search sources");
     this._search = this._searchPanelElement.createChild("input");
-    this._search.setAttribute("type", "search");
+    this._search.placeholder = WebInspector.UIString("Search sources");
+    this._search.setAttribute("type", "text");
     this._search.addStyleClass("search-config-search");
     this._search.setAttribute("results", "0");
     this._search.setAttribute("size", 30);

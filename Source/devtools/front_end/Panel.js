@@ -28,7 +28,6 @@
 
 /**
  * @extends {WebInspector.View}
- * @implements {WebInspector.Searchable}
  * @constructor
  */
 WebInspector.Panel = function(name)
@@ -48,54 +47,14 @@ WebInspector.Panel = function(name)
 // Should by in sync with style declarations.
 WebInspector.Panel.counterRightMargin = 25;
 
-WebInspector.Panel._minimalSearchQuerySize = 3;
-
 WebInspector.Panel.prototype = {
     get name()
     {
         return this._panelName;
     },
 
-    show: function()
-    {
-        WebInspector.View.prototype.show.call(this, WebInspector.inspectorView.panelsElement());
-    },
-
-    wasShown: function()
-    {
-        var panelStatusBar = document.getElementById("panel-status-bar")
-        var statusBarItems = this.statusBarItems;
-        if (statusBarItems) {
-            this._statusBarItemContainer = document.createElement("div");
-            for (var i = 0; i < statusBarItems.length; ++i)
-                this._statusBarItemContainer.appendChild(statusBarItems[i]);
-            panelStatusBar.appendChild(this._statusBarItemContainer);
-        }
-        var statusBarText = this.statusBarText();
-        if (statusBarText) {
-            this._statusBarTextElement = statusBarText;
-            panelStatusBar.appendChild(statusBarText);
-        }
-        panelStatusBar.enableStyleClass("hidden", !statusBarText && !statusBarItems);
-        // FIXME: remove this hack when panels stop returning status bar buttons.
-        document.getElementById("main").style.top = (!statusBarText && !statusBarItems ? 26 : 49) + "px";
-        this.focus();
-    },
-
-    willHide: function()
-    {
-        if (this._statusBarItemContainer)
-            this._statusBarItemContainer.remove();
-        delete this._statusBarItemContainer;
-
-        if (this._statusBarTextElement)
-            this._statusBarTextElement.remove();
-        delete this._statusBarTextElement;
-    },
-
     reset: function()
     {
-        this.searchCanceled();
     },
 
     defaultFocusedElement: function()
@@ -103,53 +62,12 @@ WebInspector.Panel.prototype = {
         return this.sidebarTreeElement || this.element;
     },
 
-    searchCanceled: function()
-    {
-        WebInspector.searchController.updateSearchMatchesCount(0, this);
-    },
-
     /**
-     * @param {string} query
-     * @param {boolean} shouldJump
+     * @return {WebInspector.SearchableView}
      */
-    performSearch: function(query, shouldJump)
-    {
-        // Call searchCanceled since it will reset everything we need before doing a new search.
-        this.searchCanceled();
-    },
-
-    /**
-     * @return {number}
-     */
-    minimalSearchQuerySize: function()
-    {
-        return WebInspector.Panel._minimalSearchQuerySize;
-    },
-
-    jumpToNextSearchResult: function()
-    {
-    },
-
-    jumpToPreviousSearchResult: function()
-    {
-    },
-
-    /**
-     * @override
-     * @param {HTMLInputElement} input
-     * @return {?Array.<string>}
-     */
-    buildSuggestions: function(input)
+    searchableView: function()
     {
         return null;
-    },
-
-    /**
-     * @return {boolean}
-     */
-    canSearchAndReplace: function()
-    {
-        return false;
     },
 
     /**
@@ -164,36 +82,6 @@ WebInspector.Panel.prototype = {
      * @param {string} text
      */
     replaceAllWith: function(query, text)
-    {
-    },
-
-    /**
-     * @return {boolean}
-     */
-    canFilter: function()
-    {
-        return false;
-    },
-
-    /**
-     * @param {string} query
-     */
-    performFilter: function(query)
-    {
-    },
-
-    /**
-     * @return {boolean}
-     */
-    canSetFooterElement: function()
-    {
-        return false;
-    },
-
-    /**
-     * @param {?Element} element
-     */
-    setFooterElement: function(element)
     {
     },
 
@@ -265,16 +153,9 @@ WebInspector.Panel.prototype = {
      * @param {Element} anchor
      * @return {boolean}
      */
-    canShowAnchorLocation: function(anchor)
-    {
-        return false;
-    },
-
-    /**
-     * @param {Element} anchor
-     */
     showAnchorLocation: function(anchor)
     {
+        return false;
     },
 
     elementsToRestoreScrollPositionsFor: function()
@@ -289,7 +170,28 @@ WebInspector.Panel.prototype = {
     {
         var shortcutKey = WebInspector.KeyboardShortcut.makeKeyFromEvent(event);
         var handler = this._shortcuts[shortcutKey];
-        if (handler && handler(event))
+        if (handler && handler(event)) {
+            event.handled = true;
+            return;
+        }
+
+        var searchableView = this.searchableView();
+        if (!searchableView)
+            return;
+
+        function handleSearchShortcuts(shortcuts, handler)
+        {
+            for (var i = 0; i < shortcuts.length; ++i) {
+                if (shortcuts[i].key !== shortcutKey)
+                    continue;
+                return handler.call(searchableView);
+            }
+            return false;
+        }
+
+        if (handleSearchShortcuts(WebInspector.SearchableView.findShortcuts(), searchableView.handleFindShortcut))
+            event.handled = true;
+        else if (handleSearchShortcuts(WebInspector.SearchableView.cancelSearchShortcuts(), searchableView.handleCancelSearchShortcut))
             event.handled = true;
     },
 
@@ -347,9 +249,17 @@ WebInspector.PanelDescriptor.prototype = {
     {
         if (this._panel)
             return this._panel;
+        if (!this._isCreatingPanel) {
+            var oldStackTraceLimit = Error.stackTraceLimit;
+            Error.stackTraceLimit = 50;
+            console.assert(!this._isCreatingPanel, "PanelDescriptor.panel() is called from inside itself: " + new Error().stack);
+            Error.stackTraceLimit = oldStackTraceLimit;
+        }
         if (this._scriptName)
             loadScript(this._scriptName);
+        this._isCreatingPanel = true;
         this._panel = new WebInspector[this._className];
+        delete this._isCreatingPanel;
         return this._panel;
     },
 

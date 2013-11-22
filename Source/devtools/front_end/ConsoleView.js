@@ -36,8 +36,14 @@
 WebInspector.ConsoleView = function(hideContextSelector)
 {
     WebInspector.View.call(this);
+    this.registerRequiredCSS("filter.css");
 
-    this.element.id = "console-view";
+    this._searchableView = new WebInspector.SearchableView(this);
+    this._searchableView.setMinimalSearchQuerySize(0);
+    this._searchableView.show(this.element);
+
+    this._contentsElement = this._searchableView.element;
+    this._contentsElement.classList.add("fill", "vbox", "console-view");
     this._visibleMessagesIndices = [];
     this._urlToMessageCount = {};
 
@@ -55,18 +61,24 @@ WebInspector.ConsoleView = function(hideContextSelector)
         this._contextSelector.element.addStyleClass("hidden");
     }
 
-    var statusBarElement = this.element.createChild("div", "console-status-bar");
+    this._filterBar = new WebInspector.FilterBar();
+
+    var statusBarElement = this._contentsElement.createChild("div", "console-status-bar");
     statusBarElement.appendChild(this._clearConsoleButton.element);
+    statusBarElement.appendChild(this._filterBar.filterButton());
     statusBarElement.appendChild(this._frameSelector.element);
     statusBarElement.appendChild(this._contextSelector.element);
-    statusBarElement.appendChild(this._filter.sourceFilterButton.element);
-    statusBarElement.appendChild(this._filter.filterBarElement);
+
+    this._filtersContainer = this._contentsElement.createChild("div", "console-filters-header hidden");
+    this._filtersContainer.appendChild(this._filterBar.filtersElement());
+    this._filterBar.addEventListener(WebInspector.FilterBar.Events.FiltersToggled, this._onFiltersToggled, this);
+    this._filter.addFilters(this._filterBar);
 
     this.messagesElement = document.createElement("div");
     this.messagesElement.id = "console-messages";
     this.messagesElement.className = "monospace";
     this.messagesElement.addEventListener("click", this._messagesClicked.bind(this), true);
-    this.element.appendChild(this.messagesElement);
+    this._contentsElement.appendChild(this.messagesElement);
     this._scrolledToBottom = true;
 
     this.promptElement = document.createElement("div");
@@ -117,6 +129,20 @@ WebInspector.ConsoleView = function(hideContextSelector)
 }
 
 WebInspector.ConsoleView.prototype = {
+    /**
+     * @return {Element}
+     */
+    defaultFocusedElement: function()
+    {
+        return this.promptElement
+    },
+
+    _onFiltersToggled: function(event)
+    {
+        var toggled = /** @type {boolean} */ (event.data);
+        this._filtersContainer.enableStyleClass("hidden", !toggled);
+    },
+
     /**
      * @param {WebInspector.Event} event
      */
@@ -295,7 +321,7 @@ WebInspector.ConsoleView.prototype = {
      * @param {number=} count
      */
     _updateFilterStatus: function(count) {
-        count = (typeof count === undefined) ? (WebInspector.console.messages.length - this._visibleMessagesIndices.length) : count;
+        count = (typeof count === "undefined") ? (WebInspector.console.messages.length - this._visibleMessagesIndices.length) : count;
         this._filterStatusTextElement.textContent = WebInspector.UIString(count == 1 ? "%d message is hidden by filters." : "%d messages are hidden by filters.", count);
         this._filterStatusMessageElement.style.display = count ? "" : "none";
     },
@@ -346,7 +372,7 @@ WebInspector.ConsoleView.prototype = {
 
         if (this._searchRegex && message.matchesRegex(this._searchRegex)) {
             this._searchResultsIndices.push(index);
-            WebInspector.searchController.updateSearchMatchesCount(this._searchResultsIndices.length, this._searchProvider);
+            this._searchableView.updateSearchMatchesCount(this._searchResultsIndices.length);
         }
     },
 
@@ -359,7 +385,7 @@ WebInspector.ConsoleView.prototype = {
         this._searchResultsIndices = [];
 
         if (this._searchRegex)
-            WebInspector.searchController.updateSearchMatchesCount(0, this._searchProvider);
+            this._searchableView.updateSearchMatchesCount(0);
 
         this.currentGroup = this.topGroup;
         this.topGroup.messagesElement.removeChildren();
@@ -479,7 +505,7 @@ WebInspector.ConsoleView.prototype = {
         }
 
         if (this._searchRegex)
-            WebInspector.searchController.updateSearchMatchesCount(this._searchResultsIndices.length, this._searchProvider);
+            this._searchableView.updateSearchMatchesCount(this._searchResultsIndices.length);
 
         this._visibleMessagesIndices = newVisibleMessages;
         this._updateFilterStatus();
@@ -674,31 +700,18 @@ WebInspector.ConsoleView.prototype = {
     searchCanceled: function()
     {
         this._clearCurrentSearchResultHighlight();
-        delete this._searchProvider;
         delete this._searchResultsIndices;
         delete this._searchRegex;
-    },
-
-    canSearchAndReplace: function()
-    {
-        return false;
-    },
-
-    canFilter: function()
-    {
-        return true;
     },
 
     /**
      * @param {string} query
      * @param {boolean} shouldJump
-     * @param {WebInspector.Searchable=} self
      */
-    performSearch: function(query, shouldJump, self)
+    performSearch: function(query, shouldJump)
     {
         this.searchCanceled();
-        this._searchProvider = self || this;
-        WebInspector.searchController.updateSearchMatchesCount(0, this._searchProvider);
+        this._searchableView.updateSearchMatchesCount(0);
         this._searchRegex = createPlainTextSearchRegex(query, "gi");
 
         this._searchResultsIndices = [];
@@ -706,59 +719,27 @@ WebInspector.ConsoleView.prototype = {
             if (WebInspector.console.messages[this._visibleMessagesIndices[i]].matchesRegex(this._searchRegex))
                 this._searchResultsIndices.push(this._visibleMessagesIndices[i]);
         }
-        WebInspector.searchController.updateSearchMatchesCount(this._searchResultsIndices.length, this._searchProvider);
+        this._searchableView.updateSearchMatchesCount(this._searchResultsIndices.length);
         this._currentSearchResultIndex = -1;
         if (shouldJump && this._searchResultsIndices.length)
-            this._jumpToSearchResult(0, self);
+            this._jumpToSearchResult(0);
     },
 
-    /**
-     * @return {number}
-     */
-    minimalSearchQuerySize: function()
-    {
-        return 0;
-    },
-
-    /**
-     * @param {string} query
-     */
-    performFilter: function(query)
-    {
-        this._filter.performFilter(query);
-    },
-
-    /**
-     * @param {WebInspector.Searchable=} self
-     */
-    jumpToNextSearchResult: function(self)
+    jumpToNextSearchResult: function()
     {
         if (!this._searchResultsIndices || !this._searchResultsIndices.length)
             return;
-        this._jumpToSearchResult((this._currentSearchResultIndex + 1) % this._searchResultsIndices.length, self);
+        this._jumpToSearchResult((this._currentSearchResultIndex + 1) % this._searchResultsIndices.length);
     },
 
-    /**
-     * @param {WebInspector.Searchable=} self
-     */
-    jumpToPreviousSearchResult: function(self)
+    jumpToPreviousSearchResult: function()
     {
         if (!this._searchResultsIndices || !this._searchResultsIndices.length)
             return;
         var index = this._currentSearchResultIndex - 1;
         if (index === -1)
             index = this._searchResultsIndices.length - 1;
-        this._jumpToSearchResult(index, self);
-    },
-
-    /**
-     * @override
-     * @param {HTMLInputElement} input
-     * @return {?Array.<string>}
-     */
-    buildSuggestions: function(input)
-    {
-        return null;
+        this._jumpToSearchResult(index);
     },
 
     _clearCurrentSearchResultHighlight: function()
@@ -771,11 +752,11 @@ WebInspector.ConsoleView.prototype = {
         this._currentSearchResultIndex = -1;
     },
 
-    _jumpToSearchResult: function(index, self)
+    _jumpToSearchResult: function(index)
     {
         this._clearCurrentSearchResultHighlight();
         this._currentSearchResultIndex = index;
-        WebInspector.searchController.updateCurrentMatchIndex(this._currentSearchResultIndex, this._searchProvider);
+        this._searchableView.updateCurrentMatchIndex(this._currentSearchResultIndex);
         WebInspector.console.messages[this._searchResultsIndices[index]].highlightSearchResults(this._searchRegex);
     },
 
@@ -789,63 +770,42 @@ WebInspector.ConsoleView.prototype = {
 WebInspector.ConsoleViewFilter = function()
 {
     this._messageURLFilters = WebInspector.settings.messageURLFilters.get();
-    this._messageSourceFilters = WebInspector.settings.messageSourceFilters.get();
-    this._messageLevelFilters = WebInspector.settings.messageLevelFilters.get();
-
-    this._sourceToKeyMap = {};
-
-    for (var key in WebInspector.ConsoleViewFilter._messageSourceGroups) {
-        if (!WebInspector.ConsoleViewFilter._messageSourceGroups[key].sources) {
-            console.assert(!this._otherKey);
-            this._otherKey = key;
-            continue;
-        }
-
-        for (var i = 0; i < WebInspector.ConsoleViewFilter._messageSourceGroups[key].sources.length; ++i)
-            this._sourceToKeyMap[WebInspector.ConsoleViewFilter._messageSourceGroups[key].sources[i]] = key;
-    }
-
     this._filterChanged = this.dispatchEventToListeners.bind(this, WebInspector.ConsoleViewFilter.Events.FilterChanged);
-
-    WebInspector.settings.messageSourceFilters.addChangeListener(this._updateSourceFilterButton.bind(this));
-    WebInspector.settings.messageLevelFilters.addChangeListener(this._updateLevelFilterBar.bind(this));
-
-    this.sourceFilterButton = new WebInspector.StatusBarButton(WebInspector.UIString("Filter"), "console-filter", 2);
-    this.sourceFilterButton.element.addEventListener("mousedown", this._handleSourceFilterButtonClick.bind(this), false);
-
-    this._filterBarElements = [];
-
-    this.filterBarElement = document.createElement("div");
-    this.filterBarElement.className = "scope-bar status-bar-item";
-
-    this._createLevelFilterBarElement("all", WebInspector.UIString("All"));
-
-    var dividerElement = document.createElement("div");
-    dividerElement.addStyleClass("scope-bar-divider");
-    this.filterBarElement.appendChild(dividerElement);
-
-    this._createLevelFilterBarElement("error", WebInspector.UIString("Errors"));
-    this._createLevelFilterBarElement("warning", WebInspector.UIString("Warnings"));
-    this._createLevelFilterBarElement("log", WebInspector.UIString("Logs"));
-    this._createLevelFilterBarElement("debug", WebInspector.UIString("Debug"));
-
-    this._updateLevelFilterBar();
-    this._updateSourceFilterButton();
 };
 
 WebInspector.ConsoleViewFilter.Events = {
     FilterChanged: "FilterChanged"
 };
 
-WebInspector.ConsoleViewFilter._messageSourceGroups = {
-    JS: { sources: [WebInspector.ConsoleMessage.MessageSource.JS], title: "JavaScript", styleClass: "filter-type-javascript"},
-    Network: { sources: [WebInspector.ConsoleMessage.MessageSource.Network], title: "Network", styleClass: "filter-type-network"},
-    Logging: { sources: [WebInspector.ConsoleMessage.MessageSource.ConsoleAPI], title: "Logging", styleClass: "filter-type-logging"},
-    CSS: { sources: [WebInspector.ConsoleMessage.MessageSource.CSS], title: "CSS", styleClass: "filter-type-css"},
-    Other: { title: "Other", styleClass: "filter-type-other"}
-};
-
 WebInspector.ConsoleViewFilter.prototype = {
+    addFilters: function(filterBar)
+    {
+        this._textFilterUI = new WebInspector.TextFilterUI();
+        this._textFilterUI.addEventListener(WebInspector.FilterUI.Events.FilterChanged, this._textFilterChanged, this);
+        filterBar.addFilter(this._textFilterUI);
+
+        this._levelFilterUI = new WebInspector.NamedBitSetFilterUI();
+        this._levelFilterUI.addBit("error", WebInspector.UIString("Errors"));
+        this._levelFilterUI.addBit("warning", WebInspector.UIString("Warnings"));
+        this._levelFilterUI.addBit("info", WebInspector.UIString("Info"));
+        this._levelFilterUI.addBit("log", WebInspector.UIString("Logs"));
+        this._levelFilterUI.addBit("debug", WebInspector.UIString("Debug"));
+        this._levelFilterUI.bindSetting(WebInspector.settings.messageLevelFilters);
+        this._levelFilterUI.addEventListener(WebInspector.FilterUI.Events.FilterChanged, this._filterChanged, this);
+        filterBar.addFilter(this._levelFilterUI);
+    },
+
+    _textFilterChanged: function(event)
+    {
+        var query = this._textFilterUI.value();
+        if (!query)
+            delete this._filterRegex;
+        else
+            this._filterRegex = createPlainTextSearchRegex(query, "gi");
+
+        this._filterChanged();
+    },
+
     /**
      * @param {string} url
      */
@@ -890,7 +850,7 @@ WebInspector.ConsoleViewFilter.prototype = {
         if (message.url && this._messageURLFilters[message.url])
             return false;
 
-        if (message.level && this._messageLevelFilters[message.level])
+        if (message.level && !this._levelFilterUI.accept(message.level))
             return false;
 
         if (this._filterRegex) {
@@ -899,163 +859,15 @@ WebInspector.ConsoleViewFilter.prototype = {
                 return false;
         }
 
-        // We store group keys, and we have resolved group by message source
-        if (message.source) {
-            if (this._sourceToKeyMap[message.source])
-                return !this._messageSourceFilters[this._sourceToKeyMap[message.source]];
-            else
-                return !this._messageSourceFilters[this._otherKey];
-        }
-
-
         return true;
     },
 
     reset: function()
     {
-        this._messageSourceFilters = {};
-        WebInspector.settings.messageSourceFilters.set(this._messageSourceFilters);
         this._messageURLFilters = {};
         WebInspector.settings.messageURLFilters.set(this._messageURLFilters);
-        this._messageLevelFilters = {};
-        WebInspector.settings.messageLevelFilters.set(this._messageLevelFilters);
+        WebInspector.settings.messageLevelFilters.set({});
         this._filterChanged();
-    },
-
-    /**
-     * @param {string} query
-     */
-    performFilter: function(query)
-    {
-        if (!query)
-            delete this._filterRegex;
-        else
-            this._filterRegex = createPlainTextSearchRegex(query, "gi");
-
-        this._filterChanged();
-    },
-
-    /**
-     * @param {string} sourceGroup
-     * @private
-     */
-    _toggleMessageSourceFilter: function(sourceGroup)
-    {
-        if (!this._messageSourceFilters[sourceGroup])
-            this._messageSourceFilters[sourceGroup] = true;
-        else
-            delete this._messageSourceFilters[sourceGroup];
-
-        WebInspector.settings.messageSourceFilters.set(this._messageSourceFilters);
-        this._filterChanged();
-    },
-
-    /**
-     * @private
-     */
-    _updateSourceFilterButton: function()
-    {
-        var hasActiveSourceFilter = false;
-        for (var sourceGroup in WebInspector.ConsoleViewFilter._messageSourceGroups) {
-            if (this._messageSourceFilters[sourceGroup]) {
-                hasActiveSourceFilter = true;
-                break;
-            }
-        }
-
-        this.sourceFilterButton.state = hasActiveSourceFilter;
-    },
-
-    /**
-     * @param {Event} event
-     * @returns {WebInspector.ContextMenu}
-     * @private
-     */
-    _createSourceFilterMenu: function(event)
-    {
-        var menu = new WebInspector.ContextMenu(event);
-
-        for (var sourceGroup in WebInspector.ConsoleViewFilter._messageSourceGroups) {
-            var filter = WebInspector.ConsoleViewFilter._messageSourceGroups[sourceGroup];
-
-            menu.appendCheckboxItem(WebInspector.UIString(WebInspector.UIString(filter.title)), this._toggleMessageSourceFilter.bind(this, sourceGroup), !this._messageSourceFilters[sourceGroup]);
-        }
-
-        return menu;
-    },
-
-    /**
-     * @param {string} level
-     * @param {string} label
-     * @private
-     */
-    _createLevelFilterBarElement: function(level, label)
-    {
-        var categoryElement = document.createElement("li");
-        categoryElement.category = level;
-        categoryElement.className = level;
-        categoryElement.textContent = label;
-        categoryElement.addEventListener("click", this._toggleLevelFilter.bind(this, level), false);
-
-        this._filterBarElements[level] = categoryElement;
-        this.filterBarElement.appendChild(categoryElement);
-    },
-
-    /**
-     * @param {string} level
-     * @param {Event} event
-     * @private
-     */
-    _toggleLevelFilter: function(level, event)
-    {
-        var isMac = WebInspector.isMac();
-        var selectMultiple = false;
-        if (isMac && event.metaKey && !event.ctrlKey && !event.altKey && !event.shiftKey)
-            selectMultiple = true;
-        if (!isMac && event.ctrlKey && !event.metaKey && !event.altKey && !event.shiftKey)
-            selectMultiple = true;
-
-        if (level === "all")
-            this._messageLevelFilters = {};
-        else {
-            if (!selectMultiple) {
-                this._messageLevelFilters = {error: true, warning: true, log: true, debug: true};
-                delete this._messageLevelFilters[level];
-            } else {
-                if (this._messageLevelFilters[level])
-                    delete this._messageLevelFilters[level];
-                else
-                    this._messageLevelFilters[level] = true;
-            }
-        }
-
-        WebInspector.settings.messageLevelFilters.set(this._messageLevelFilters);
-        this._filterChanged();
-    },
-
-    /**
-     * @private
-     */
-    _updateLevelFilterBar: function()
-    {
-        var all = !(this._messageLevelFilters["error"] || this._messageLevelFilters["warning"] || this._messageLevelFilters["log"] || this._messageLevelFilters["debug"]);
-
-        this._filterBarElements["all"].enableStyleClass("selected", all);
-
-        this._filterBarElements["error"].enableStyleClass("selected", !all && !this._messageLevelFilters["error"]);
-        this._filterBarElements["warning"].enableStyleClass("selected", !all && !this._messageLevelFilters["warning"]);
-        this._filterBarElements["log"].enableStyleClass("selected", !all && !this._messageLevelFilters["log"]);
-        this._filterBarElements["debug"].enableStyleClass("selected", !all && !this._messageLevelFilters["debug"]);
-    },
-
-    /**
-     * @param {Event} event
-     * @private
-     */
-    _handleSourceFilterButtonClick: function(event)
-    {
-        if (!event.button)
-            this._createSourceFilterMenu(event).showSoftMenu();
     },
 
     __proto__: WebInspector.Object.prototype
@@ -1228,15 +1040,28 @@ WebInspector.ConsoleGroup.prototype = {
         var groupTitleElement = event.target.enclosingNodeOrSelfWithClass("console-group-title");
         if (groupTitleElement) {
             var groupElement = groupTitleElement.enclosingNodeOrSelfWithClass("console-group");
-            if (groupElement)
-                if (groupElement.hasStyleClass("collapsed"))
-                    groupElement.removeStyleClass("collapsed");
-                else
-                    groupElement.addStyleClass("collapsed");
+            if (groupElement && !groupElement.classList.toggle("collapsed")) {
+                if (groupElement.group) {
+                    groupElement.group.wasShown();
+                }
+            }
             groupTitleElement.scrollIntoViewIfNeeded(true);
         }
-
         event.consume(true);
+    },
+
+    wasShown: function()
+    {
+        if (this.element.hasStyleClass("collapsed"))
+            return;
+        var node = this.messagesElement.firstChild;
+        while (node) {
+            if (node.hasStyleClass("console-message") && node.message)
+                node.message.wasShown();
+            if (node.hasStyleClass("console-group") && node.group)
+                node.group.wasShown();
+            node = node.nextSibling;
+        }
     }
 }
 

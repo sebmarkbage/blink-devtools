@@ -71,7 +71,6 @@ WebInspector.CodeMirrorTextEditor = function(url, delegate)
         smartIndent: false,
         styleSelectedText: true,
         electricChars: false,
-        autoCloseBrackets: { explode: false }
     });
     this._codeMirror._codeMirrorTextEditor = this;
 
@@ -130,6 +129,8 @@ WebInspector.CodeMirrorTextEditor = function(url, delegate)
     WebInspector.settings.textEditorIndent.addChangeListener(this._updateEditorIndentation, this);
     this._updateEditorIndentation();
     WebInspector.settings.showWhitespacesInEditor.addChangeListener(this._updateCodeMirrorMode, this);
+    WebInspector.settings.textEditorBracketMatching.addChangeListener(this._enableBracketMatchingIfNeeded, this);
+    this._enableBracketMatchingIfNeeded();
 
     this._codeMirror.setOption("keyMap", WebInspector.isMac() ? "devtools-mac" : "devtools-pc");
     this._codeMirror.setOption("flattenSpans", false);
@@ -224,6 +225,11 @@ WebInspector.CodeMirrorTextEditor.LongLineModeLineLengthThreshold = 2000;
 WebInspector.CodeMirrorTextEditor.MaximumNumberOfWhitespacesPerSingleSpan = 16;
 
 WebInspector.CodeMirrorTextEditor.prototype = {
+    _enableBracketMatchingIfNeeded: function()
+    {
+        this._codeMirror.setOption("autoCloseBrackets", WebInspector.settings.textEditorBracketMatching.get() ? { explode: false } : false);
+    },
+
     wasShown: function()
     {
         this._codeMirror.refresh();
@@ -360,16 +366,15 @@ WebInspector.CodeMirrorTextEditor.prototype = {
         if (WebInspector.CodeMirrorTextEditor._whitespaceStyleInjected || !WebInspector.settings.showWhitespacesInEditor.get())
             return;
         WebInspector.CodeMirrorTextEditor._whitespaceStyleInjected = true;
-        const classBase = ".cm-whitespace-";
+        const classBase = ".show-whitespaces .CodeMirror .cm-whitespace-";
         const spaceChar = "·";
         var spaceChars = "";
         var rules = "";
-        for(var i = 1; i <= WebInspector.CodeMirrorTextEditor.MaximumNumberOfWhitespacesPerSingleSpan; ++i) {
+        for (var i = 1; i <= WebInspector.CodeMirrorTextEditor.MaximumNumberOfWhitespacesPerSingleSpan; ++i) {
             spaceChars += spaceChar;
             var rule = classBase + i + "::before { content: '" + spaceChars + "';}\n";
             rules += rule;
         }
-        rules += ".cm-tab:before { display: block !important; }\n";
         var style = document.createElement("style");
         style.textContent = rules;
         document.head.appendChild(style);
@@ -411,10 +416,14 @@ WebInspector.CodeMirrorTextEditor.prototype = {
     },
 
     /**
-     * @param {WebInspector.CompletionDictionary} dictionary
+     * @param {?WebInspector.CompletionDictionary} dictionary
      */
     setCompletionDictionary: function(dictionary)
     {
+        if (!dictionary) {
+            delete this._dictionary;
+            return;
+        }
         this._dictionary = dictionary;
         this._addTextToCompletionDictionary(this.text());
     },
@@ -520,7 +529,8 @@ WebInspector.CodeMirrorTextEditor.prototype = {
      */
     _whitespaceOverlayMode: function(mimeType)
     {
-        var modeName = CodeMirror.mimeModes[mimeType] + "+whitespaces";
+        var modeName = CodeMirror.mimeModes[mimeType] ? (CodeMirror.mimeModes[mimeType].name || CodeMirror.mimeModes[mimeType]) : CodeMirror.mimeModes["text/plain"];
+        modeName += "+whitespaces";
         if (CodeMirror.modes[modeName])
             return modeName;
 
@@ -564,6 +574,7 @@ WebInspector.CodeMirrorTextEditor.prototype = {
     _updateCodeMirrorMode: function()
     {
         var showWhitespaces = WebInspector.settings.showWhitespacesInEditor.get();
+        this.element.enableStyleClass("show-whitespaces", showWhitespaces);
         this._codeMirror.setOption("mode", showWhitespaces ? this._whitespaceOverlayMode(this._mimeType) : this._mimeType);
     },
 

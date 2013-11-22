@@ -250,6 +250,17 @@ Element.prototype.measurePreferredSize = function(containerElement)
     return result;
 }
 
+/**
+ * @param {Event} event
+ * @return {boolean}
+ */
+Element.prototype.containsEventPoint = function(event)
+{
+    var box = this.getBoundingClientRect();
+    return box.left < event.x  && event.x < box.right &&
+           box.top < event.y && event.y < box.bottom;
+}
+
 Node.prototype.enclosingNodeOrSelfWithNodeNameInArray = function(nameArray)
 {
     for (var node = this; node && node !== this.ownerDocument; node = node.parentNode)
@@ -297,13 +308,23 @@ Element.prototype.isInsertionCaretInside = function()
 }
 
 /**
+ * @param {string} elementName
+ * @param {string=} className
+ */
+Document.prototype.createElementWithClass = function(elementName, className)
+{
+    var element = this.createElement(elementName);
+    if (className)
+        element.className = className;
+    return element;
+}
+
+/**
  * @param {string=} className
  */
 Element.prototype.createChild = function(elementName, className)
 {
-    var element = this.ownerDocument.createElement(elementName);
-    if (className)
-        element.className = className;
+    var element = this.ownerDocument.createElementWithClass(elementName, className);
     this.appendChild(element);
     return element;
 }
@@ -341,19 +362,8 @@ Element.prototype.totalOffsetTop = function()
 
 Element.prototype.totalOffset = function()
 {
-    var totalLeft = 0;
-    var totalTop = 0;
-
-    for (var element = this; element; element = element.offsetParent) {
-        totalLeft += element.offsetLeft;
-        totalTop += element.offsetTop;
-        if (this !== element) {
-            totalLeft += element.clientLeft - element.scrollLeft;
-            totalTop += element.clientTop - element.scrollTop;
-        }
-    }
-
-    return { left: totalLeft, top: totalTop };
+    var rect = this.getBoundingClientRect();
+    return { left: rect.left, top: rect.top };
 }
 
 Element.prototype.scrollOffset = function()

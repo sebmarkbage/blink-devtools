@@ -112,7 +112,8 @@ WebInspector.LayerTree.prototype = {
                 node._update();
             }
         }
-        this._model.forEachLayer(updateLayer.bind(this), this._model.contentRoot());
+        if (this._model.contentRoot())
+            this._model.forEachLayer(updateLayer.bind(this), this._model.contentRoot());
         // Cleanup layers that don't exist anymore from tree.
         for (var node = /** @type {TreeElement|TreeOutline} */(this._treeOutline.children[0]); node && !node.root;) {
             if (seenLayers[node.representedObject.id()]) {
@@ -197,10 +198,10 @@ WebInspector.LayerTreeElement.prototype = {
     {
         var layer = /** @type {WebInspector.Layer} */ (this.representedObject);
         var nodeId = layer.nodeIdForSelfOrAncestor();
-        var node = nodeId && WebInspector.domAgent.nodeForId(nodeId);
+        var node = nodeId ? WebInspector.domAgent.nodeForId(nodeId) : null;
         var title = document.createDocumentFragment();
         title.createChild("div", "selection");
-        title.appendChild(document.createTextNode(node ? node.appropriateSelectorFor(false) :  "#" + layer.id()));
+        title.appendChild(document.createTextNode(node ? WebInspector.DOMPresentationUtils.appropriateSelectorFor(node, false) :  "#" + layer.id()));
         var details = title.createChild("span", "dimmed");
         details.textContent = WebInspector.UIString(" (%d × %d)", layer.width(), layer.height());
         this.title = title;

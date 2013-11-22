@@ -408,9 +408,10 @@ InjectedScript.prototype = {
         var nameProcessed = { __proto__: null };
 
         /**
+         * @param {Object} o
          * @param {Array.<string>} names
          */
-        function process(names)
+        function process(o, names)
         {
             for (var i = 0; i < names.length; ++i) {
                 var name = names[i];
@@ -454,8 +455,8 @@ InjectedScript.prototype = {
 
         for (var o = object; this._isDefined(o); o = o.__proto__) {
             // First call Object.keys() to enforce ordering of the property descriptors.
-            process(Object.keys(/** @type {!Object} */ (o)));
-            process(Object.getOwnPropertyNames(/** @type {!Object} */ (o)));
+            process(o, Object.keys(/** @type {!Object} */ (o)));
+            process(o, Object.getOwnPropertyNames(/** @type {!Object} */ (o)));
 
             if (ownProperties) {
                 if (object.__proto__ && !accessorPropertiesOnly)
@@ -611,7 +612,7 @@ InjectedScript.prototype = {
 
     /**
      * @param {Object} callFrame
-     * @return {Array.<InjectedScript.CallFrameProxy>|boolean}
+     * @return {!Array.<InjectedScript.CallFrameProxy>|boolean}
      */
     wrapCallFrames: function(callFrame)
     {
@@ -994,6 +995,10 @@ InjectedScript.RemoteObject.prototype = {
                 var descriptor = descriptors[i];
                 if (!descriptor)
                     continue;
+                if (descriptor.wasThrown) {
+                    preview.lossless = false;
+                    continue;
+                }
                 if (!descriptor.enumerable && !descriptor.isOwn)
                     continue;
 
@@ -1093,7 +1098,7 @@ InjectedScript.RemoteObject.prototype = {
 /**
  * @constructor
  * @param {number} ordinal
- * @param {Object} callFrame
+ * @param {!Object} callFrame
  */
 InjectedScript.CallFrameProxy = function(ordinal, callFrame)
 {
@@ -1102,6 +1107,8 @@ InjectedScript.CallFrameProxy = function(ordinal, callFrame)
     this.location = { scriptId: toString(callFrame.sourceID), lineNumber: callFrame.line, columnNumber: callFrame.column };
     this.scopeChain = this._wrapScopeChain(callFrame);
     this.this = injectedScript._wrapObject(callFrame.thisObject, "backtrace");
+    if (callFrame.isAtReturn)
+        this.returnValue = injectedScript._wrapObject(callFrame.returnValue, "backtrace");
 }
 
 InjectedScript.CallFrameProxy.prototype = {
@@ -1178,7 +1185,20 @@ function CommandLineAPI(commandLineAPIImpl, callFrame)
      */
     function customToStringMethod(name)
     {
-        return function () { return "function " + name + "() { [Command Line API] }"; };
+        return function()
+        {
+            var funcArgsSyntax = "";
+            try {
+                var funcSyntax = "" + commandLineAPIImpl[name];
+                funcSyntax = funcSyntax.replace(/\n/g, " ");
+                funcSyntax = funcSyntax.replace(/^function[^\(]*\(([^\)]*)\).*$/, "$1");
+                funcSyntax = funcSyntax.replace(/\s*,\s*/g, ", ");
+                funcSyntax = funcSyntax.replace(/\bopt_(\w+)\b/g, "[$1]");
+                funcArgsSyntax = funcSyntax.trim();
+            } catch (e) {
+            }
+            return "function " + name + "(" + funcArgsSyntax + ") { [Command Line API] }";
+        };
     }
 
     for (var i = 0; i < CommandLineAPI.members_.length; ++i) {
@@ -1202,6 +1222,7 @@ function CommandLineAPI(commandLineAPIImpl, callFrame)
 }
 
 // NOTE: Please keep the list of API methods below snchronized to that in WebInspector.RuntimeModel!
+// NOTE: Argument names of these methods will be printed in the console, so use pretty names!
 /**
  * @type {Array.<string>}
  * @const
@@ -1222,24 +1243,24 @@ function CommandLineAPIImpl()
 CommandLineAPIImpl.prototype = {
     /**
      * @param {string} selector
-     * @param {Node=} start
+     * @param {Node=} opt_startNode
      */
-    $: function (selector, start)
+    $: function (selector, opt_startNode)
     {
-        if (this._canQuerySelectorOnNode(start))
-            return start.querySelector(selector);
+        if (this._canQuerySelectorOnNode(opt_startNode))
+            return opt_startNode.querySelector(selector);
 
         return inspectedWindow.document.querySelector(selector);
     },
 
     /**
      * @param {string} selector
-     * @param {Node=} start
+     * @param {Node=} opt_startNode
      */
-    $$: function (selector, start)
+    $$: function (selector, opt_startNode)
     {
-        if (this._canQuerySelectorOnNode(start))
-            return start.querySelectorAll(selector);
+        if (this._canQuerySelectorOnNode(opt_startNode))
+            return opt_startNode.querySelectorAll(selector);
         return inspectedWindow.document.querySelectorAll(selector);
     },
 
@@ -1254,12 +1275,12 @@ CommandLineAPIImpl.prototype = {
 
     /**
      * @param {string} xpath
-     * @param {Node=} context
+     * @param {Node=} opt_startNode
      */
-    $x: function(xpath, context)
+    $x: function(xpath, opt_startNode)
     {
-        var doc = (context && context.ownerDocument) || inspectedWindow.document;
-        var result = doc.evaluate(xpath, context || doc, null, XPathResult.ANY_TYPE, null);
+        var doc = (opt_startNode && opt_startNode.ownerDocument) || inspectedWindow.document;
+        var result = doc.evaluate(xpath, opt_startNode || doc, null, XPathResult.ANY_TYPE, null);
         switch (result.resultType) {
         case XPathResult.NUMBER_TYPE:
             return result.numberValue;
@@ -1276,12 +1297,12 @@ CommandLineAPIImpl.prototype = {
         }
     },
 
-    dir: function()
+    dir: function(var_args)
     {
         return inspectedWindow.console.dir.apply(inspectedWindow.console, arguments)
     },
 
-    dirxml: function()
+    dirxml: function(var_args)
     {
         return inspectedWindow.console.dirxml.apply(inspectedWindow.console, arguments)
     },
@@ -1299,25 +1320,25 @@ CommandLineAPIImpl.prototype = {
         return result;
     },
 
-    profile: function()
+    profile: function(opt_title)
     {
         return inspectedWindow.console.profile.apply(inspectedWindow.console, arguments)
     },
 
-    profileEnd: function()
+    profileEnd: function(opt_title)
     {
         return inspectedWindow.console.profileEnd.apply(inspectedWindow.console, arguments)
     },
 
     /**
      * @param {Object} object
-     * @param {Array.<string>|string=} types
+     * @param {Array.<string>|string=} opt_types
      */
-    monitorEvents: function(object, types)
+    monitorEvents: function(object, opt_types)
     {
         if (!object || !object.addEventListener || !object.removeEventListener)
             return;
-        types = this._normalizeEventTypes(types);
+        var types = this._normalizeEventTypes(opt_types);
         for (var i = 0; i < types.length; ++i) {
             object.removeEventListener(types[i], this._logEvent, false);
             object.addEventListener(types[i], this._logEvent, false);
@@ -1326,13 +1347,13 @@ CommandLineAPIImpl.prototype = {
 
     /**
      * @param {Object} object
-     * @param {Array.<string>|string=} types
+     * @param {Array.<string>|string=} opt_types
      */
-    unmonitorEvents: function(object, types)
+    unmonitorEvents: function(object, opt_types)
     {
         if (!object || !object.addEventListener || !object.removeEventListener)
             return;
-        types = this._normalizeEventTypes(types);
+        var types = this._normalizeEventTypes(opt_types);
         for (var i = 0; i < types.length; ++i)
             object.removeEventListener(types[i], this._logEvent, false);
     },
@@ -1363,10 +1384,26 @@ CommandLineAPIImpl.prototype = {
 
     /**
      * @param {Node} node
+     * @return {{type: string, listener: function(), useCapture: boolean, remove: function()}|undefined}
      */
     getEventListeners: function(node)
     {
-        return InjectedScriptHost.getEventListeners(node);
+        var result = InjectedScriptHost.getEventListeners(node);
+        if (!result)
+            return result;
+        /** @this {{type: string, listener: function(), useCapture: boolean}} */
+        var removeFunc = function()
+        {
+            node.removeEventListener(this.type, this.listener, this.useCapture);
+        }
+        for (var type in result) {
+            var listeners = result[type];
+            for (var i = 0, listener; listener = listeners[i]; ++i) {
+                listener["type"] = type;
+                listener["remove"] = removeFunc;
+            }
+        }
+        return result;
     },
 
     debug: function(fn)
@@ -1388,7 +1425,7 @@ CommandLineAPIImpl.prototype = {
         InjectedScriptHost.unmonitorFunction(fn);
     },
 
-    table: function()
+    table: function(data, opt_columns)
     {
         inspectedWindow.console.table.apply(inspectedWindow.console, arguments);
     },

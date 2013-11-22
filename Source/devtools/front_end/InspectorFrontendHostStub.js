@@ -84,6 +84,7 @@ WebInspector.InspectorFrontendHostStub.prototype = {
 
     setWindowBounds: function(x, y, width, height, callback)
     {
+        callback();
     },
 
     moveWindowBy: function(x, y)
@@ -173,6 +174,10 @@ WebInspector.InspectorFrontendHostStub.prototype = {
         return null;
     },
 
+    upgradeDraggedFileSystemPermissions: function(domFileSystem)
+    {
+    },
+
     indexPath: function(requestId, fileSystemPath)
     {
     },
@@ -197,8 +202,8 @@ WebInspector.InspectorFrontendHostStub.prototype = {
 
 InspectorFrontendHost = new WebInspector.InspectorFrontendHostStub();
 
-} else {
-    // Install message-based handlers with callbacks.
+} else if (InspectorFrontendHost.sendMessageToEmbedder) {
+  // Install message-based handlers with callbacks.
     var lastCallId = 0;
     InspectorFrontendHost._callbacks = [];
 
@@ -233,9 +238,22 @@ InspectorFrontendHost = new WebInspector.InspectorFrontendHostStub();
         InspectorFrontendHost.sendMessageToEmbedder(JSON.stringify(message));
     };
 
-    var methodList = [ "addFileSystem", "append", "bringToFront", "indexPath", "moveWindowBy", "openInNewTab",
-                       "removeFileSystem", "requestFileSystems", "requestSetDockSide", "save", "searchInPath",
-                       "setWindowBounds", "stopIndexing" ];
+    var methodList = [
+        "addFileSystem",
+        "append",
+        "bringToFront",
+        "closeWindow",
+        "indexPath",
+        "moveWindowBy",
+        "openInNewTab",
+        "removeFileSystem",
+        "requestFileSystems",
+        "requestSetDockSide",
+        "save",
+        "searchInPath",
+        "setWindowBounds",
+        "stopIndexing"
+    ];
 
     for (var i = 0; i < methodList.length; ++i)
         InspectorFrontendHost[methodList[i]] = dispatch.bind(null, methodList[i]);

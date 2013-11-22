@@ -36,8 +36,6 @@ WebInspector.ElementsPanelDescriptor = function()
 {
     WebInspector.PanelDescriptor.call(this, "elements", WebInspector.UIString("Elements"), "ElementsPanel", "ElementsPanel.js");
     WebInspector.ContextMenu.registerProvider(this);
-
-    WebInspector.registerViewInDrawer("overrides", WebInspector.UIString("Overrides"), this);
 }
 
 WebInspector.ElementsPanelDescriptor.prototype = {
@@ -86,6 +84,16 @@ WebInspector.ElementsPanelDescriptor.prototype = {
 
         stylesPaneSection.addAlternateKeys(WebInspector.ElementsPanelDescriptor.ShortcutKeys.IncrementBy01, WebInspector.UIString("Increment by %f", 0.1));
         stylesPaneSection.addAlternateKeys(WebInspector.ElementsPanelDescriptor.ShortcutKeys.DecrementBy01, WebInspector.UIString("Decrement by %f", 0.1));
+
+        function toggleEmulationView()
+        {
+            if (WebInspector.settings.showEmulationViewInDrawer.get())
+                WebInspector.inspectorView.registerViewInDrawer("emulation", WebInspector.UIString("Emulation"), this);
+            else
+                WebInspector.inspectorView.unregisterViewInDrawer("emulation");
+        }
+        WebInspector.settings.showEmulationViewInDrawer.addChangeListener(toggleEmulationView, this);
+        toggleEmulationView.call(this);
     },
 
     /**

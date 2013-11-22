@@ -80,9 +80,9 @@ iframe.view {
     position: absolute;
     left: 0;
     right: 0;
-    height: 100%;
     top: 0;
     z-index: -100;
+    bottom: 0;
 }
 
 .resources-event-dividers {
@@ -100,7 +100,7 @@ iframe.view {
     top: 0;
     left: 0;
     right: 0;
-    background-color: rgba(255, 255, 255, 0.8);
+    background-color: rgba(255, 255, 255, 0.85);
     background-clip: padding-box;
     height: 20px;
     z-index: 200;

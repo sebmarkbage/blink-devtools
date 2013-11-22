@@ -59,7 +59,7 @@ WebInspector.TextEditor.prototype = {
      */
     indent: function() { },
 
-    /*
+    /**
      * @param {number} lineNumber
      * @param {number} column
      * @return {?{x: number, y: number, height: number}}
@@ -279,7 +279,7 @@ WebInspector.TextEditor.prototype = {
     willHide: function() { },
 
     /**
-     * @param {WebInspector.CompletionDictionary} dictionary
+     * @param {?WebInspector.CompletionDictionary} dictionary
      */
     setCompletionDictionary: function(dictionary) { },
 }

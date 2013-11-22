@@ -684,7 +684,7 @@ WebInspector.ElementsTreeOutline.prototype = {
      * ancestors.
      *
      * @param {WebInspector.DOMNode} node
-     * @param {function(?WebInspector.RemoteObject)=} userCallback
+     * @param {function(?WebInspector.RemoteObject, boolean=)=} userCallback
      */
     _toggleHideShortcut: function(node, userCallback)
     {
@@ -738,6 +738,7 @@ WebInspector.ElementsTreeOutline.ElementDecorator = function()
 WebInspector.ElementsTreeOutline.ElementDecorator.prototype = {
     /**
      * @param {WebInspector.DOMNode} node
+     * @return {?string}
      */
     decorate: function(node)
     {
@@ -745,6 +746,7 @@ WebInspector.ElementsTreeOutline.ElementDecorator.prototype = {
 
     /**
      * @param {WebInspector.DOMNode} node
+     * @return {?string}
      */
     decorateAncestor: function(node)
     {
@@ -2086,9 +2088,19 @@ WebInspector.ElementsTreeElement.prototype = {
                 break;
             case Node.DOCUMENT_FRAGMENT_NODE:
                 var fragmentElement = info.titleDOM.createChild("span", "webkit-html-fragment");
-                fragmentElement.textContent = node.nodeNameInCorrectCase().collapseWhitespace();
-                if (node.isInShadowTree())
+                var nodeTitle;
+                if (node.isInShadowTree()) {
                     fragmentElement.addStyleClass("shadow");
+                    var shadowRootType = node.shadowRootType();
+                    if (shadowRootType) {
+                        nodeTitle = "#shadow-root";
+                        if (shadowRootType === WebInspector.DOMNode.ShadowRootTypes.UserAgent)
+                            nodeTitle += " (" + shadowRootType + ")";
+                    }
+                }
+                if (!nodeTitle)
+                    nodeTitle = node.nodeNameInCorrectCase().collapseWhitespace();
+                fragmentElement.textContent = nodeTitle;
                 break;
             default:
                 info.titleDOM.appendChild(document.createTextNode(node.nodeNameInCorrectCase().collapseWhitespace()));
@@ -2392,8 +2404,8 @@ WebInspector.ElementsTreeUpdater.prototype = {
         var hidePanelWhileUpdating = this._recentlyModifiedNodes.size() > 10;
         if (hidePanelWhileUpdating) {
             var treeOutlineContainerElement = this._treeOutline.element.parentNode;
-            this._treeOutline.element.addStyleClass("hidden");
             var originalScrollTop = treeOutlineContainerElement ? treeOutlineContainerElement.scrollTop : 0;
+            this._treeOutline.element.addStyleClass("hidden");
         }
 
         var nodes = this._recentlyModifiedNodes.keys();

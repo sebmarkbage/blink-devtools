@@ -261,30 +261,30 @@ WebInspector.HeapSnapshotView.prototype = {
         if (this.currentView !== this.constructorsView && this.currentView !== this.diffView)
             return;
 
+        if (query.charAt(0) === "@") {
+            var snapshotNodeId = parseInt(query.substring(1), 10);
+            if (!isNaN(snapshotNodeId)) {
+                function didHighlight(found) {
+                    finishedCallback(this, found ? 1 : 0);
+                }
+                this.dataGrid.highlightObjectByHeapSnapshotId(String(snapshotNodeId), didHighlight.bind(this));
+            } else {
+                finishedCallback(this, 0);
+            }
+            return;
+        }
+
         this._searchFinishedCallback = finishedCallback;
         var nameRegExp = createPlainTextSearchRegex(query, "i");
-        var snapshotNodeId = null;
 
         function matchesByName(gridNode) {
             return ("_name" in gridNode) && nameRegExp.test(gridNode._name);
         }
 
-        function matchesById(gridNode) {
-            return ("snapshotNodeId" in gridNode) && gridNode.snapshotNodeId === snapshotNodeId;
-        }
-
-        var matchPredicate;
-        if (query.charAt(0) !== "@")
-            matchPredicate = matchesByName;
-        else {
-            snapshotNodeId = parseInt(query.substring(1), 10);
-            matchPredicate = matchesById;
-        }
-
         function matchesQuery(gridNode)
         {
             delete gridNode._searchMatched;
-            if (matchPredicate(gridNode)) {
+            if (matchesByName(gridNode)) {
                 gridNode._searchMatched = true;
                 gridNode.refresh();
                 return true;
@@ -351,6 +351,10 @@ WebInspector.HeapSnapshotView.prototype = {
     showingLastSearchResult: function()
     {
         return (this._searchResults && this._currentSearchResultIndex === (this._searchResults.length - 1));
+    },
+
+    currentSearchResultIndex: function() {
+        return this._currentSearchResultIndex;
     },
 
     _jumpToSearchResult: function(index)
@@ -1493,6 +1497,8 @@ WebInspector.HeapTrackingOverviewGrid = function(heapProfileHeader)
 
     this._overviewContainer = this.element.createChild("div", "overview-container");
     this._overviewGrid = new WebInspector.OverviewGrid("heap-recording");
+    this._overviewGrid.element.addStyleClass("fill");
+
     this._overviewCanvas = this._overviewContainer.createChild("canvas", "heap-recording-overview-canvas");
     this._overviewContainer.appendChild(this._overviewGrid.element);
     this._overviewCalculator = new WebInspector.HeapTrackingOverviewGrid.OverviewCalculator();

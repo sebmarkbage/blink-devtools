@@ -667,7 +667,7 @@ WebInspector.DebuggerModel.prototype = {
     },
 
     /**
-     * @param {WebInspector.DebuggerModel.Location} rawLocation
+     * @param {WebInspector.DebuggerModel.Location|DebuggerAgent.Location} rawLocation
      * @return {?WebInspector.UILocation}
      */
     rawLocationToUILocation: function(rawLocation)
@@ -834,6 +834,14 @@ WebInspector.DebuggerModel.CallFrame.prototype = {
     get this()
     {
         return this._payload.this;
+    },
+
+    /**
+     * @return {RuntimeAgent.RemoteObject|undefined}
+     */
+    get returnValue()
+    {
+        return this._payload.returnValue;
     },
 
     /**

@@ -411,11 +411,13 @@ WebInspector.ObjectPropertyTreeElement.prototype = {
     },
 
     /**
-     * @param {!WebInspector.RemoteObject} result
+     * @param {?WebInspector.RemoteObject} result
      * @param {boolean=} wasThrown
      */
     _onInvokeGetterClick: function(result, wasThrown)
     {
+        if (!result)
+            return;
         this.property.value = result;
         this.property.wasThrown = wasThrown;
 
@@ -526,7 +528,7 @@ WebInspector.ObjectPropertyTreeElement.populateWithProperties = function(treeEle
 /**
  * @param {!WebInspector.RemoteObject} object
  * @param {!Array.<string>} propertyPath
- * @param {function(!WebInspector.RemoteObject, boolean=)} callback
+ * @param {function(?WebInspector.RemoteObject, boolean=)} callback
  * @return {!Element}
  */
 WebInspector.ObjectPropertyTreeElement.createRemoteObjectAccessorPropertySpan = function(object, propertyPath, callback)
@@ -539,31 +541,8 @@ WebInspector.ObjectPropertyTreeElement.createRemoteObjectAccessorPropertySpan = 
 
     function onInvokeGetterClick(event)
     {
-        /**
-         * @param {?Protocol.Error} error
-         * @param {RuntimeAgent.RemoteObject} result
-         * @param {boolean=} wasThrown
-         */
-        function evaluateCallback(error, result, wasThrown)
-        {
-            if (error)
-                return;
-            callback(WebInspector.RemoteObject.fromPayload(result), wasThrown);
-        }
-
-        function remoteFunction(arrayStr)
-        {
-            var result = this;
-            var properties = JSON.parse(arrayStr);
-            for (var i = 0, n = properties.length; i < n; ++i)
-                result = result[properties[i]];
-            return result;
-        }
-
         event.consume();
-
-        var functionArguments = [ {value: JSON.stringify(propertyPath)} ]
-        RuntimeAgent.callFunctionOn(object.objectId, String(remoteFunction), functionArguments, undefined, false, undefined, evaluateCallback);
+        object.getProperty(propertyPath, callback);
     }
 
     return rootElement;
@@ -589,6 +568,10 @@ WebInspector.FunctionScopeMainTreeElement.prototype = {
         if (this.children.length && !this.shouldRefreshChildren)
             return;
 
+        /**
+         * @param {?Protocol.Error} error
+         * @param {DebuggerAgent.FunctionDetails} response
+         */
         function didGetDetails(error, response)
         {
             if (error) {
@@ -606,38 +589,33 @@ WebInspector.FunctionScopeMainTreeElement.prototype = {
                 var isTrueObject;
 
                 switch (scope.type) {
-                    case "local":
-                        // Not really expecting this scope type here.
-                        title = WebInspector.UIString("Local");
-                        isTrueObject = false;
-                        break;
-                    case "closure":
-                        title = WebInspector.UIString("Closure");
-                        isTrueObject = false;
-                        break;
-                    case "catch":
-                        title = WebInspector.UIString("Catch");
-                        isTrueObject = false;
-                        break;
-                    case "with":
-                        title = WebInspector.UIString("With Block");
-                        isTrueObject = true;
-                        break;
-                    case "global":
-                        title = WebInspector.UIString("Global");
-                        isTrueObject = true;
-                        break;
-                    default:
-                        console.error("Unknown scope type: " + scope.type);
-                        continue;
+                case DebuggerAgent.ScopeType.Local:
+                    // Not really expecting this scope type here.
+                    title = WebInspector.UIString("Local");
+                    isTrueObject = false;
+                    break;
+                case DebuggerAgent.ScopeType.Closure:
+                    title = WebInspector.UIString("Closure");
+                    isTrueObject = false;
+                    break;
+                case DebuggerAgent.ScopeType.Catch:
+                    title = WebInspector.UIString("Catch");
+                    isTrueObject = false;
+                    break;
+                case DebuggerAgent.ScopeType.With:
+                    title = WebInspector.UIString("With Block");
+                    isTrueObject = true;
+                    break;
+                case DebuggerAgent.ScopeType.Global:
+                    title = WebInspector.UIString("Global");
+                    isTrueObject = true;
+                    break;
+                default:
+                    console.error("Unknown scope type: " + scope.type);
+                    continue;
                 }
 
-                var scopeRef;
-                if (isTrueObject)
-                    scopeRef = undefined;
-                else
-                    scopeRef = new WebInspector.ScopeRef(i, undefined, this._remoteObject.objectId);
-
+                var scopeRef = isTrueObject ? undefined : new WebInspector.ScopeRef(i, undefined, this._remoteObject.objectId);
                 var remoteObject = WebInspector.ScopeRemoteObject.fromPayload(scope.object, scopeRef);
                 if (isTrueObject) {
                     var property = WebInspector.RemoteObjectProperty.fromScopeValue(title, remoteObject);
@@ -844,9 +822,15 @@ WebInspector.ArrayGroupingTreeElement._populateAsFragment = function(treeElement
         return result;
     }
 
-    /** @this {WebInspector.ArrayGroupingTreeElement} */
-    function processArrayFragment(arrayFragment)
+    /**
+     * @param {?WebInspector.RemoteObject} arrayFragment
+     * @param {boolean=} wasThrown
+     * @this {WebInspector.ArrayGroupingTreeElement}
+     */
+    function processArrayFragment(arrayFragment, wasThrown)
     {
+        if (!arrayFragment || wasThrown)
+            return;
         arrayFragment.getAllProperties(false, processProperties.bind(this));
     }
 
@@ -891,17 +875,26 @@ WebInspector.ArrayGroupingTreeElement._populateNonIndexProperties = function(tre
         return result;
     }
 
-    function processObjectFragment(arrayFragment)
+    /**
+     * @param {?WebInspector.RemoteObject} arrayFragment
+     * @param {boolean=} wasThrown
+     */
+    function processObjectFragment(arrayFragment, wasThrown)
     {
+        if (!arrayFragment || wasThrown)
+            return;
         arrayFragment.getOwnProperties(processProperties.bind(this));
     }
 
-    /** @this {WebInspector.ArrayGroupingTreeElement} */
+    /**
+     * @param {?Array.<WebInspector.RemoteObjectProperty>} properties
+     * @param {?Array.<WebInspector.RemoteObjectProperty>=} internalProperties
+     * @this {WebInspector.ArrayGroupingTreeElement}
+     */
     function processProperties(properties, internalProperties)
     {
         if (!properties)
             return;
-
         properties.sort(WebInspector.ObjectPropertiesSection.CompareProperties);
         for (var i = 0; i < properties.length; ++i) {
             properties[i].parentObject = this._object;

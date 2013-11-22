@@ -152,17 +152,6 @@
                 "hidden": true
             },
             {
-                "id": "SearchResult",
-                "type": "object",
-                "description": "Search result for resource.",
-                "properties": [
-                    { "name": "url", "type": "string", "description": "Resource URL." },
-                    { "name": "frameId", "$ref": "FrameId", "description": "Resource frame id." },
-                    { "name": "matchesCount", "type": "number", "description": "Number of matches in the resource content." }
-                ],
-                "hidden": true
-            },
-            {
                 "id": "Cookie",
                 "type": "object",
                 "description": "Cookie object",
@@ -312,19 +301,6 @@
                 "hidden": true
             },
             {
-                "name": "searchInResources",
-                "description": "Searches for given string in frame / resource tree structure.",
-                "parameters": [
-                    { "name": "text", "type": "string", "description": "String to search for."  },
-                    { "name": "caseSensitive", "type": "boolean", "optional": true, "description": "If true, search is case sensitive." },
-                    { "name": "isRegex", "type": "boolean", "optional": true, "description": "If true, treats string parameter as regex." }
-                ],
-                "returns": [
-                    { "name": "result", "type": "array", "items": { "$ref": "SearchResult" }, "description": "List of search results." }
-                ],
-                "hidden": true
-            },
-            {
                 "name": "setDocumentContent",
                 "description": "Sets given markup as the document's HTML.",
                 "parameters": [
@@ -340,8 +316,10 @@
                     { "name": "width", "type": "integer", "description": "Overriding width value in pixels (minimum 0, maximum 10000000). 0 disables the override." },
                     { "name": "height", "type": "integer", "description": "Overriding height value in pixels (minimum 0, maximum 10000000). 0 disables the override." },
                     { "name": "deviceScaleFactor", "type": "number", "description": "Overriding device scale factor value (must be positive)." },
+                    { "name": "emulateViewport", "type": "boolean", "description": "Whether viewport meta tag should be respected." },
                     { "name": "fitWindow", "type": "boolean", "description": "Whether a view that exceeds the available browser window area should be scaled down to fit." },
-                    { "name": "textAutosizing", "type": "boolean", "optional": true, "description": "Whether to override the text autosizing feature." }
+                    { "name": "textAutosizing", "type": "boolean", "optional": true, "description": "Whether to override the text autosizing feature." },
+                    { "name": "fontScaleFactor", "type": "number", "optional": true, "description": "Overriding system font scale factor (must be positive)." }
                 ],
                 "hidden": true
             },
@@ -459,6 +437,14 @@
                     { "name": "deviceScaleFactor", "type": "number", "hidden": true, "description": "Device scale factor." },
                     { "name": "pageScaleFactor", "type": "number", "hidden": true, "description": "Page scale factor." },
                     { "name": "viewport", "$ref": "DOM.Rect", "hidden": true, "description": "Viewport in CSS pixels." }
+                ],
+                "hidden": true
+            },
+            {
+                "name": "canScreencast",
+                "description": "Tells whether screencast is supported.",
+                "returns": [
+                  { "name": "result", "type": "boolean", "description": "True if screencast is supported." }
                 ],
                 "hidden": true
             },
@@ -818,7 +804,7 @@
                 "description": "Console message.",
                 "properties": [
                     { "name": "source", "type": "string", "enum": ["xml", "javascript", "network", "console-api", "storage", "appcache", "rendering", "css", "security", "other", "deprecation"], "description": "Message source." },
-                    { "name": "level", "type": "string", "enum": ["log", "warning", "error", "debug"], "description": "Message severity." },
+                    { "name": "level", "type": "string", "enum": ["log", "warning", "error", "debug", "info"], "description": "Message severity." },
                     { "name": "text", "type": "string", "description": "Message text." },
                     { "name": "type", "type": "string", "optional": true, "enum": ["log", "dir", "dirxml", "table", "trace", "clear", "startGroup", "startGroupCollapsed", "endGroup", "assert", "profile", "profileEnd"], "description": "Console message type." },
                     { "name": "url", "type": "string", "optional": true, "description": "URL of the message origin." },
@@ -1776,6 +1762,12 @@
                 "description": "Pseudo element type."
             },
             {
+                "id": "ShadowRootType",
+                "type": "string",
+                "enum": ["user-agent", "author"],
+                "description": "Shadow root type."
+            },
+            {
                 "id": "Node",
                 "type": "object",
                 "properties": [
@@ -1796,6 +1788,7 @@
                     { "name": "name", "type": "string", "optional": true, "description": "<code>Attr</code>'s name." },
                     { "name": "value", "type": "string", "optional": true, "description": "<code>Attr</code>'s value." },
                     { "name": "pseudoType", "$ref": "PseudoType", "optional": true, "description": "Pseudo element type for this node." },
+                    { "name": "shadowRootType", "$ref": "ShadowRootType", "optional": true, "description": "Shadow root type." },
                     { "name": "frameId", "$ref": "Page.FrameId", "optional": true, "description": "Frame ID for frame owner elements.", "hidden": true },
                     { "name": "contentDocument", "$ref": "Node", "optional": true, "description": "Content document for frame owner elements." },
                     { "name": "shadowRoots", "type": "array", "optional": true, "items": { "$ref": "Node" }, "description": "Shadow root list for given element host.", "hidden": true },
@@ -2884,7 +2877,8 @@
                 "parameters": [
                     { "name": "maxCallStackDepth", "optional": true, "type": "integer", "description": "Samples JavaScript stack traces up to <code>maxCallStackDepth</code>, defaults to 5." },
                     { "name": "bufferEvents", "optional": true, "type": "boolean", "hidden": true, "description": "Whether instrumentation events should be buffered and returned upon <code>stop</code> call." },
-                    { "name": "includeDomCounters", "optional": true, "type": "boolean", "hidden": true, "description": "Whether DOM counters data should be included into timeline events." }
+                    { "name": "includeDomCounters", "optional": true, "type": "boolean", "hidden": true, "description": "Whether DOM counters data should be included into timeline events." },
+                    { "name": "includeGPUEvents", "optional": true, "type": "boolean", "hidden": true, "description": "Whether events from GPU process should be collected." }
                 ],
                 "description": "Starts capturing instrumentation events."
             },
@@ -2957,9 +2951,7 @@
                 "type": "object",
                 "properties": [
                     { "name": "location", "$ref": "Location", "description": "Location of the function." },
-                    { "name": "name", "type": "string", "optional": true, "description": "Name of the function. Not present for anonymous functions." },
-                    { "name": "displayName", "type": "string", "optional": true, "description": "Display name of the function(specified in 'displayName' property on the function object)." },
-                    { "name": "inferredName", "type": "string", "optional": true, "description": "Name of the function inferred from its initial assignment." },
+                    { "name": "functionName", "type": "string", "description": "Name of the function." },
                     { "name": "scopeChain", "type": "array", "optional": true, "items": { "$ref": "Scope" }, "description": "Scope chain for this closure." }
                 ],
                 "description": "Information about the function."
@@ -2972,7 +2964,8 @@
                     { "name": "functionName", "type": "string", "description": "Name of the JavaScript function called on this call frame." },
                     { "name": "location", "$ref": "Location", "description": "Location in the source code." },
                     { "name": "scopeChain", "type": "array", "items": { "$ref": "Scope" }, "description": "Scope chain for this call frame." },
-                    { "name": "this", "$ref": "Runtime.RemoteObject", "description": "<code>this</code> object for this call frame." }
+                    { "name": "this", "$ref": "Runtime.RemoteObject", "description": "<code>this</code> object for this call frame." },
+                    { "name": "returnValue", "$ref": "Runtime.RemoteObject", "optional": true, "hidden": true, "description": "The value being returned, if the function is at return point." }
                 ],
                 "description": "JavaScript call frame. Array of call frames form the call stack."
             },
@@ -4002,16 +3995,6 @@
                 "description": "Disables compositing tree inspection."
             },
             {
-                "name": "getLayers",
-                "parameters": [
-                    { "name": "nodeId", "optional": true, "$ref": "DOM.NodeId", "description": "Root of the subtree for which we want to gather layers (return entire tree if not specified)" }
-                ],
-                "description": "Returns the layer tree structure of the current page.",
-                "returns": [
-                    { "name": "layers", "type": "array", "items": { "$ref": "Layer" }, "description": "Child layers." }
-                ]
-            },
-            {
                 "name": "compositingReasons",
                 "parameters": [
                     { "name": "layerId", "$ref": "LayerId", "description": "The id of the layer for which we want to get the reasons it was composited." }
@@ -4024,7 +4007,10 @@
         ],
         "events": [
             {
-                "name": "layerTreeDidChange"
+                "name": "layerTreeDidChange",
+                "parameters": [
+                    { "name": "layers", "type": "array", "items": { "$ref": "Layer" }, "optional": true, "description": "Layer tree, absent if not in the comspositing mode." }
+                ]
             },
             {
                 "name": "layerPainted",
@@ -4041,9 +4027,10 @@
         "commands": [
             {
                 "name": "start",
-                "description": "Strart trace events collection.",
+                "description": "Start trace events collection.",
                 "parameters": [
-                    { "name": "categories", "type": "string", "description": "Category/tag filter" }
+                    { "name": "categories", "type": "string", "description": "Category/tag filter" },
+                    { "name": "options", "type": "string", "description": "Tracing options" }
                 ]
             },
             {

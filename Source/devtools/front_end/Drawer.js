@@ -30,21 +30,19 @@
 /**
  * @constructor
  * @implements {WebInspector.ViewFactory}
+ * @param {WebInspector.InspectorView} inspectorView
  */
-WebInspector.Drawer = function()
+WebInspector.Drawer = function(inspectorView)
 {
-    this.element = document.getElementById("drawer");
-    this.element.style.height = 0;
+    this._inspectorView = inspectorView;
+
+    this.element = this._inspectorView.element.createChild("div", "drawer");
+    this.element.style.flexBasis = 0;
 
     this._savedHeight = 200; // Default.
-    this._mainElement = document.getElementById("main");
-    this._toolbarElement = document.getElementById("toolbar");
 
     this._drawerContentsElement = this.element.createChild("div");
     this._drawerContentsElement.id = "drawer-contents";
-
-    this._footerElementContainer = this.element.createChild("div", "status-bar hidden");
-    this._footerElementContainer.id = "drawer-footer";
 
     this._toggleDrawerButton = new WebInspector.StatusBarButton(WebInspector.UIString("Show drawer."), "console-status-bar-item");
     this._toggleDrawerButton.addEventListener("click", this.toggle, this);
@@ -53,6 +51,8 @@ WebInspector.Drawer = function()
     this._tabbedPane = new WebInspector.TabbedPane();
     this._tabbedPane.closeableTabs = false;
     this._tabbedPane.markAsRoot();
+
+    // Register console early for it to be the first in the list.
     this.registerView("console", WebInspector.UIString("Console"), this);
 
     this._tabbedPane.addEventListener(WebInspector.TabbedPane.EventTypes.TabClosed, this._updateTabStrip, this);
@@ -63,14 +63,6 @@ WebInspector.Drawer = function()
 
 WebInspector.Drawer.prototype = {
     /**
-     * @param {boolean} enabled
-     */
-    setEnabled: function(enabled)
-    {
-        this._toggleDrawerButton.setEnabled(enabled);
-    },
-
-    /**
      * @return {Element}
      */
     toggleButtonElement: function()
@@ -80,7 +72,7 @@ WebInspector.Drawer.prototype = {
 
     _constrainHeight: function(height)
     {
-        return Number.constrain(height, Preferences.minConsoleHeight, window.innerHeight - this._mainElement.totalOffsetTop() - Preferences.minConsoleHeight);
+        return Number.constrain(height, Preferences.minConsoleHeight, this._inspectorView.element.offsetHeight - Preferences.minConsoleHeight);
     },
 
     isHiding: function()
@@ -110,8 +102,20 @@ WebInspector.Drawer.prototype = {
      */
     registerView: function(id, title, factory)
     {
+        if (this._tabbedPane.hasTab(id))
+            this._tabbedPane.closeTab(id);
         this._viewFactories[id] = factory;
         this._tabbedPane.appendTab(id, title, new WebInspector.View());
+    },
+
+    /**
+     * @param {string} id
+     */
+    unregisterView: function(id)
+    {
+        if (this._tabbedPane.hasTab(id))
+            this._tabbedPane.closeTab(id);
+        delete this._viewFactories[id];
     },
 
     /**
@@ -120,17 +124,29 @@ WebInspector.Drawer.prototype = {
      */
     createView: function(id)
     {
-        return WebInspector.consoleView;
+        return WebInspector.panel("console").createView(id);
     },
 
     /**
-     * @param {string} tabId
+     * @param {string} id
      */
-    showView: function(tabId)
+    closeView: function(id)
     {
-        this._tabbedPane.changeTabView(tabId, this._viewFactories[tabId].createView(tabId));
-        this._innerShow();
-        this._tabbedPane.selectTab(tabId, true);
+        this._tabbedPane.closeTab(id);
+    },
+
+    /**
+     * @param {string} id
+     * @param {boolean=} immediately
+     */
+    showView: function(id, immediately)
+    {
+        if (!this._toggleDrawerButton.enabled())
+            return;
+        if (this._viewFactories[id])
+            this._tabbedPane.changeTabView(id, this._viewFactories[id].createView(id));
+        this._innerShow(immediately);
+        this._tabbedPane.selectTab(id, true);
         this._updateTabStrip();
     },
 
@@ -141,8 +157,14 @@ WebInspector.Drawer.prototype = {
      */
     showCloseableView: function(id, title, view)
     {
-        if (!this._tabbedPane.hasTab(id))
+        if (!this._toggleDrawerButton.enabled())
+            return;
+        if (!this._tabbedPane.hasTab(id)) {
             this._tabbedPane.appendTab(id, title, view, undefined, false, true);
+        } else {
+            this._tabbedPane.changeTabView(id, view);
+            this._tabbedPane.changeTabTitle(id, title);
+        }
         this._innerShow();
         this._tabbedPane.selectTab(id, true);
         this._updateTabStrip();
@@ -153,7 +175,7 @@ WebInspector.Drawer.prototype = {
      */
     show: function(immediately)
     {
-        this.showView(this._tabbedPane.selectedTabId);
+        this.showView(this._tabbedPane.selectedTabId, immediately);
     },
 
     /**
@@ -161,8 +183,7 @@ WebInspector.Drawer.prototype = {
      */
     _innerShow: function(immediately)
     {
-        WebInspector.searchController.cancelSearch();
-        this.immediatelyFinishAnimation();
+        this._immediatelyFinishAnimation();
 
         if (this._toggleDrawerButton.toggled)
             return;
@@ -172,16 +193,15 @@ WebInspector.Drawer.prototype = {
         document.body.addStyleClass("drawer-visible");
         this._tabbedPane.show(this._drawerContentsElement);
 
-        var height = this._constrainHeight(this._savedHeight || this.element.offsetHeight);
+        var height = this._constrainHeight(this._savedHeight);
         var animations = [
-            {element: this.element, end: {height: height}},
-            {element: this._mainElement, start: {bottom: 0}, end: {bottom: height}}
+            {element: this.element, start: {"flex-basis": 23}, end: {"flex-basis": height}},
         ];
 
         function animationCallback(finished)
         {
-            if (WebInspector.inspectorView.currentPanel())
-                WebInspector.inspectorView.currentPanel().doResize();
+            if (this._inspectorView.currentPanel())
+                this._inspectorView.currentPanel().doResize();
             if (!finished)
                 return;
             this._updateTabStrip();
@@ -205,8 +225,7 @@ WebInspector.Drawer.prototype = {
      */
     hide: function(immediately)
     {
-        WebInspector.searchController.cancelSearch();
-        this.immediatelyFinishAnimation();
+        this._immediatelyFinishAnimation();
 
         if (!this._toggleDrawerButton.toggled)
             return;
@@ -221,25 +240,23 @@ WebInspector.Drawer.prototype = {
         // Temporarily set properties and classes to mimic the post-animation values so panels
         // like Elements in their updateStatusBarItems call will size things to fit the final location.
         document.body.removeStyleClass("drawer-visible");
-        WebInspector.inspectorView.currentPanel().statusBarResized();
+        this._inspectorView.currentPanel().statusBarResized();
         document.body.addStyleClass("drawer-visible");
 
         var animations = [
-            {element: this.element, end: {height: 0}},
-            {element: this._mainElement, end: {bottom: 0}}
+            {element: this.element, start: {"flex-basis": this.element.offsetHeight }, end: {"flex-basis": 23}},
         ];
 
         function animationCallback(finished)
         {
-            if (WebInspector.inspectorView.currentPanel())
-                WebInspector.inspectorView.currentPanel().doResize();
+            if (this._inspectorView.currentPanel())
+                this._inspectorView.currentPanel().doResize();
             if (!finished)
                 return;
             this._tabbedPane.detach();
             this._drawerContentsElement.removeChildren();
             document.body.removeStyleClass("drawer-visible");
             delete this._currentAnimation;
-            this._mainElement.style.bottom = 0;
             delete this._isHiding;
         }
 
@@ -255,13 +272,12 @@ WebInspector.Drawer.prototype = {
             return;
 
         this._visibleView().storeScrollPositions();
-        var height = this._constrainHeight(parseInt(this.element.style.height, 10));
-        this._mainElement.style.bottom = height + "px";
-        this.element.style.height = height + "px";
+        var height = this._constrainHeight(this.element.offsetHeight);
+        this.element.style.flexBasis = height + "px";
         this._tabbedPane.doResize();
     },
 
-    immediatelyFinishAnimation: function()
+    _immediatelyFinishAnimation: function()
     {
         if (this._currentAnimation)
             this._currentAnimation.forceComplete();
@@ -292,12 +308,11 @@ WebInspector.Drawer.prototype = {
     _statusBarDragging: function(event)
     {
         var height = window.innerHeight - event.pageY + this._statusBarDragOffset;
-        height = Number.constrain(height, Preferences.minConsoleHeight, window.innerHeight - this._mainElement.totalOffsetTop() - Preferences.minConsoleHeight);
+        height = Number.constrain(height, Preferences.minConsoleHeight, this._inspectorView.element.offsetHeight - Preferences.minConsoleHeight);
 
-        this._mainElement.style.bottom = height + "px";
-        this.element.style.height = height + "px";
-        if (WebInspector.inspectorView.currentPanel())
-            WebInspector.inspectorView.currentPanel().doResize();
+        this.element.style.flexBasis = height + "px";
+        if (this._inspectorView.currentPanel())
+            this._inspectorView.currentPanel().doResize();
         this._tabbedPane.doResize();
 
         event.consume(true);
@@ -309,32 +324,6 @@ WebInspector.Drawer.prototype = {
         delete this._statusBarDragOffset;
 
         event.consume();
-    },
-
-    /**
-     * @param {Element} element
-     */
-    setFooterElement: function(element)
-    {
-        if (element) {
-            this._footerElementContainer.removeStyleClass("hidden");
-            this._footerElementContainer.appendChild(element);
-            this._drawerContentsElement.style.bottom = this._footerElementContainer.offsetHeight + "px";
-        } else {
-            this._footerElementContainer.addStyleClass("hidden");
-            this._footerElementContainer.removeChildren();
-            this._drawerContentsElement.style.bottom = 0;
-        }
-        this._tabbedPane.doResize();
-    },
-
-    /**
-     * @returns {WebInspector.Searchable}
-     */
-    getSearchProvider: function()
-    {
-        var view = this._visibleView();
-        return /** @type {WebInspector.Searchable} */ (view && view.performSearch ? view : null);
     },
 
     /**
@@ -372,10 +361,13 @@ WebInspector.Drawer.prototype = {
     visible: function()
     {
         return this._toggleDrawerButton.toggled;
+    },
+
+    /**
+     * @return {string}
+     */
+    selectedViewId: function()
+    {
+        return this._tabbedPane.selectedTabId;
     }
 }
-
-/**
- * @type {WebInspector.Drawer}
- */
-WebInspector.drawer = null;

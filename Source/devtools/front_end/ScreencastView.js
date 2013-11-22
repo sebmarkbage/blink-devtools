@@ -45,7 +45,6 @@ WebInspector.ScreencastView = function()
 
     this._viewportElement = this.element.createChild("div", "screencast-viewport hidden");
     this._glassPaneElement = this.element.createChild("div", "screencast-glasspane hidden");
-    this._glassPaneElement.textContent = WebInspector.UIString("The tab is inactive");
 
     this._canvasElement = this._viewportElement.createChild("canvas");
     this._canvasElement.tabIndex = 1;
@@ -80,6 +79,16 @@ WebInspector.ScreencastView = function()
 
     WebInspector.resourceTreeModel.addEventListener(WebInspector.ResourceTreeModel.EventTypes.ScreencastFrame, this._screencastFrame, this);
     WebInspector.resourceTreeModel.addEventListener(WebInspector.ResourceTreeModel.EventTypes.ScreencastVisibilityChanged, this._screencastVisibilityChanged, this);
+
+    WebInspector.timelineManager.addEventListener(WebInspector.TimelineManager.EventTypes.TimelineStarted, this._onTimeline.bind(this, true), this);
+    WebInspector.timelineManager.addEventListener(WebInspector.TimelineManager.EventTypes.TimelineStopped, this._onTimeline.bind(this, false), this);
+    this._timelineActive = WebInspector.timelineManager.isStarted();
+
+    WebInspector.profileManager.addEventListener(WebInspector.ProfileManager.EventTypes.ProfileStarted, this._onProfiler.bind(this, true), this);
+    WebInspector.profileManager.addEventListener(WebInspector.ProfileManager.EventTypes.ProfileStopped, this._onProfiler.bind(this, false), this);
+    this._profilerActive = WebInspector.CPUProfileType && WebInspector.profileManager.isStarted(WebInspector.CPUProfileType.TypeId);
+
+    this._updateGlasspane();
 }
 
 WebInspector.ScreencastView._bordersSize = 40;
@@ -101,16 +110,20 @@ WebInspector.ScreencastView.prototype = {
 
     _startCasting: function()
     {
+        if (this._timelineActive || this._profilerActive)
+            return;
         if (this._isCasting)
             return;
         this._isCasting = true;
 
-        const maxImageDimension = 800;
+        const maxImageDimension = 1024;
         var dimensions = this._viewportDimensions();
         if (dimensions.width < 0 || dimensions.height < 0) {
             this._isCasting = false;
             return;
         }
+        dimensions.width *= WebInspector.zoomFactor();
+        dimensions.height *= WebInspector.zoomFactor();
         PageAgent.startScreencast("jpeg", 80, Math.min(maxImageDimension, dimensions.width), Math.min(maxImageDimension, dimensions.height));
         WebInspector.domAgent.setHighlighter(this);
     },
@@ -143,7 +156,6 @@ WebInspector.ScreencastView.prototype = {
         var offsetTop = /** type {number} */(event.data.offsetTop) || 0;
         var offsetBottom = /** type {number} */(event.data.offsetBottom) || 0;
 
-
         var screenWidthDIP = this._viewport.width * this._pageScaleFactor;
         var screenHeightDIP = this._viewport.height * this._pageScaleFactor + offsetTop + offsetBottom;
         this._screenOffsetTop = offsetTop;
@@ -163,10 +175,53 @@ WebInspector.ScreencastView.prototype = {
      */
     _screencastVisibilityChanged: function(event)
     {
-        if (event.data.visible)
-          this._glassPaneElement.classList.add("hidden");
+        this._targetInactive = !event.data.visible;
+        this._updateGlasspane();
+    },
+
+    /**
+     * @param {boolean} on
+     * @private
+     */
+    _onTimeline: function(on)
+    {
+        this._timelineActive = on;
+        if (this._timelineActive)
+            this._stopCasting();
         else
-          this._glassPaneElement.classList.remove("hidden");
+            this._startCasting();
+        this._updateGlasspane();
+    },
+
+    /**
+     * @param {boolean} on
+     * @private
+     */
+    _onProfiler: function(on, event) {
+        if (!WebInspector.CPUProfileType || event.data != WebInspector.CPUProfileType.TypeId)
+           return;
+        this._profilerActive = on;
+        if (this._profilerActive)
+            this._stopCasting();
+        else
+            this._startCasting();
+        this._updateGlasspane();
+    },
+
+    _updateGlasspane: function()
+    {
+        if (this._targetInactive) {
+            this._glassPaneElement.textContent = WebInspector.UIString("The tab is inactive");
+            this._glassPaneElement.classList.remove("hidden");
+        } else if (this._timelineActive) {
+            this._glassPaneElement.textContent = WebInspector.UIString("Timeline is active");
+            this._glassPaneElement.classList.remove("hidden");
+        } else if (this._profilerActive) {
+            this._glassPaneElement.textContent = WebInspector.UIString("CPU profiler is active");
+            this._glassPaneElement.classList.remove("hidden");
+        } else {
+            this._glassPaneElement.classList.add("hidden");
+        }
     },
 
     /**
@@ -297,8 +352,11 @@ WebInspector.ScreencastView.prototype = {
                     InputAgent.dispatchGestureEvent("scrollEnd", x, y, timeStamp);
                 }
             } else if (event.type === "click") {
-                InputAgent.dispatchGestureEvent("tapDown", x, y, timeStamp);
-                InputAgent.dispatchGestureEvent("tap", x, y, timeStamp);
+                InputAgent.dispatchMouseEvent("mousePressed", x, y, 0, timeStamp, "left", 1, true);
+                InputAgent.dispatchMouseEvent("mouseReleased", x, y, 0, timeStamp, "left", 1, true);
+                // FIXME: migrate to tap once it dispatches clicks again.
+                // InputAgent.dispatchGestureEvent("tapDown", x, y, timeStamp);
+                // InputAgent.dispatchGestureEvent("tap", x, y, timeStamp);
             }
             this._lastScrollPosition = position;
             break;
@@ -701,6 +759,8 @@ WebInspector.ScreencastView.prototype = {
         this._navigationUrl.type = "text";
         this._navigationUrl.addEventListener('keyup', this._navigationUrlKeyUp.bind(this), true);
 
+        this._navigationProgressBar = new WebInspector.ScreencastView.ProgressTracker(this._navigationBar.createChild("div", "progress"));
+
         this._requestNavigationHistory();
         WebInspector.resourceTreeModel.addEventListener(WebInspector.ResourceTreeModel.EventTypes.InspectedURLChanged, this._requestNavigationHistory, this);
     },
@@ -716,7 +776,7 @@ WebInspector.ScreencastView.prototype = {
 
     _navigateReload: function()
     {
-        PageAgent.reload();
+        WebInspector.resourceTreeModel.reloadPage();
     },
 
     _navigationUrlKeyUp: function(event)
@@ -764,3 +824,83 @@ WebInspector.ScreencastView.prototype = {
 
   __proto__: WebInspector.View.prototype
 }
+
+/**
+ * @param {HTMLElement} element
+ * @constructor
+ */
+WebInspector.ScreencastView.ProgressTracker = function(element) {
+    this._element = element;
+
+    WebInspector.resourceTreeModel.addEventListener(WebInspector.ResourceTreeModel.EventTypes.MainFrameNavigated, this._onMainFrameNavigated, this);
+    WebInspector.resourceTreeModel.addEventListener(WebInspector.ResourceTreeModel.EventTypes.Load, this._onLoad, this);
+
+    WebInspector.networkManager.addEventListener(WebInspector.NetworkManager.EventTypes.RequestStarted, this._onRequestStarted, this);
+    WebInspector.networkManager.addEventListener(WebInspector.NetworkManager.EventTypes.RequestFinished, this._onRequestFinished, this);
+};
+
+WebInspector.ScreencastView.ProgressTracker.prototype = {
+    _onMainFrameNavigated: function()
+    {
+        this._requestIds = {};
+        this._startedRequests = 0;
+        this._finishedRequests = 0;
+        this._maxDisplayedProgress = 0;
+        this._updateProgress(0.1);  // Display first 10% on navigation start.
+    },
+
+    _onLoad: function()
+    {
+        delete this._requestIds;
+        this._updateProgress(1);  // Display 100% progress on load, hide it in 0.5s.
+        setTimeout(function() {
+            if (!this._navigationProgressVisible())
+                this._displayProgress(0);
+        }.bind(this), 500);
+    },
+
+    _navigationProgressVisible: function()
+    {
+        return !!this._requestIds;
+    },
+
+    _onRequestStarted: function(event)
+    {
+      if (!this._navigationProgressVisible())
+          return;
+      var request = /** @type {WebInspector.NetworkRequest} */ (event.data);
+      // Ignore long-living WebSockets for the sake of progress indicator, as we won't be waiting them anyway.
+      if (request.type === WebInspector.resourceTypes.WebSocket)
+          return;
+      this._requestIds[request.requestId] = request;
+      ++this._startedRequests;
+    },
+
+    _onRequestFinished: function(event)
+    {
+        if (!this._navigationProgressVisible())
+            return;
+        var request = /** @type {WebInspector.NetworkRequest} */ (event.data);
+        if (!(request.requestId in this._requestIds))
+            return;
+        ++this._finishedRequests;
+        setTimeout(function() {
+            this._updateProgress(this._finishedRequests / this._startedRequests * 0.9);  // Finished requests drive the progress up to 90%.
+        }.bind(this), 500);  // Delay to give the new requests time to start. This makes the progress smoother.
+    },
+
+    _updateProgress: function(progress)
+    {
+        if (!this._navigationProgressVisible())
+          return;
+        if (this._maxDisplayedProgress >= progress)
+          return;
+        this._maxDisplayedProgress = progress;
+        this._displayProgress(progress);
+    },
+
+    _displayProgress: function(progress)
+    {
+        this._element.style.width = (100 * progress) + "%";
+    }
+};

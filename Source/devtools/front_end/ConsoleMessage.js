@@ -71,17 +71,13 @@ WebInspector.ConsoleMessageImpl = function(source, level, message, linkifier, ty
 }
 
 WebInspector.ConsoleMessageImpl.prototype = {
-    request: function()
-    {
-        return this._request;
-    },
-
     wasShown: function()
     {
         for (var i = 0; this._dataGrids && i < this._dataGrids.length; ++i) {
             var dataGrid = this._dataGrids[i];
             var parentElement = this._dataGridParents.get(dataGrid) || null;
             dataGrid.show(parentElement);
+            dataGrid.updateWidths();
         }
     },
 
@@ -418,7 +414,7 @@ WebInspector.ConsoleMessageImpl.prototype = {
                 titleElement.createTextChild(": ");
             }
 
-            titleElement.appendChild(this._renderPropertyPreview(obj, [property]));
+            titleElement.appendChild(this._renderPropertyPreviewOrAccessor(obj, [property]));
         }
         if (preview.overflow)
             titleElement.createChild("span").textContent = "\u2026";
@@ -431,38 +427,48 @@ WebInspector.ConsoleMessageImpl.prototype = {
      * @param {!Array.<RuntimeAgent.PropertyPreview>} propertyPath
      * @return {Element}
      */
-    _renderPropertyPreview: function(object, propertyPath)
+    _renderPropertyPreviewOrAccessor: function(object, propertyPath)
     {
         var property = propertyPath.peekLast();
         if (property.type === "accessor")
-            return this._formatAsAccessorProperty(object, propertyPath.select("name"));
+            return this._formatAsAccessorProperty(object, propertyPath.select("name"), false);
+        return this._renderPropertyPreview(property.type, /** @type {string} */ (property.subtype), property.value);
+    },
 
+    /**
+     * @param {string} type
+     * @param {string} subtype
+     * @param {string=} description
+     * @return {Element}
+     */
+    _renderPropertyPreview: function(type, subtype, description)
+    {
         var span = document.createElement("span");
-        span.className = "console-formatted-" + property.type;
+        span.className = "console-formatted-" + type;
 
-        if (property.type === "function") {
+        if (type === "function") {
             span.textContent = "function";
             return span;
         }
 
-        if (property.type === "object" && property.subtype === "regexp") {
+        if (type === "object" && subtype === "regexp") {
             span.addStyleClass("console-formatted-string");
-            span.textContent = property.value;
+            span.textContent = description;
             return span;
         }
 
-        if (property.type === "object" && property.subtype === "node" && property.value) {
+        if (type === "object" && subtype === "node" && description) {
             span.addStyleClass("console-formatted-preview-node");
-            WebInspector.DOMPresentationUtils.createSpansForNodeTitle(span, property.value);
+            WebInspector.DOMPresentationUtils.createSpansForNodeTitle(span, description);
             return span;
         }
 
-        if (property.type === "string") {
-            span.textContent = "\"" + property.value.replace(/\n/g, "\u21B5") + "\"";
+        if (type === "string") {
+            span.textContent = "\"" + description.replace(/\n/g, "\u21B5") + "\"";
             return span;
         }
 
-        span.textContent = property.value;
+        span.textContent = description;
         return span;
     },
 
@@ -548,7 +554,7 @@ WebInspector.ConsoleMessageImpl.prototype = {
                 }
 
                 if (columnRendered) {
-                    var cellElement = this._renderPropertyPreview(table, [rowProperty, cellProperty]);
+                    var cellElement = this._renderPropertyPreviewOrAccessor(table, [rowProperty, cellProperty]);
                     cellElement.addStyleClass("nowrap-below");
                     rowValue[cellProperty.name] = cellElement;
                 }
@@ -605,7 +611,7 @@ WebInspector.ConsoleMessageImpl.prototype = {
             if (isNaN(name))
                 continue;
             if (property.getter)
-                elements[name] = this._formatAsAccessorProperty(array, [name]);
+                elements[name] = this._formatAsAccessorProperty(array, [name], true);
             else if (property.value)
                 elements[name] = this._formatAsArrayEntry(property.value);
         }
@@ -655,25 +661,41 @@ WebInspector.ConsoleMessageImpl.prototype = {
     /**
      * @param {!WebInspector.RemoteObject} object
      * @param {!Array.<string>} propertyPath
+     * @param {boolean} isArrayEntry
      * @return {!Element}
      */
-    _formatAsAccessorProperty: function(object, propertyPath)
+    _formatAsAccessorProperty: function(object, propertyPath, isArrayEntry)
     {
         var rootElement = WebInspector.ObjectPropertyTreeElement.createRemoteObjectAccessorPropertySpan(object, propertyPath, onInvokeGetterClick.bind(this));
 
         /**
-         * @param {!WebInspector.RemoteObject} result
+         * @param {?WebInspector.RemoteObject} result
          * @param {boolean=} wasThrown
          */
         function onInvokeGetterClick(result, wasThrown)
         {
+            if (!result)
+                return;
             rootElement.removeChildren();
             if (wasThrown) {
                 var element = rootElement.createChild("span", "error-message");
                 element.textContent = WebInspector.UIString("<exception>");
                 element.title = result.description;
-            } else {
+            } else if (isArrayEntry) {
                 rootElement.appendChild(this._formatAsArrayEntry(result));
+            } else {
+                // Make a PropertyPreview from the RemoteObject similar to the backend logic.
+                const maxLength = 100;
+                var type = result.type;
+                var subtype = result.subtype;
+                var description = "";
+                if (type !== "function" && result.description) {
+                    if (type === "string" || subtype === "regexp")
+                        description = result.description.trimMiddle(maxLength);
+                    else
+                        description = result.description.trimEnd(maxLength);
+                }
+                rootElement.appendChild(this._renderPropertyPreview(type, subtype, description));
             }
         }
 
@@ -842,6 +864,9 @@ WebInspector.ConsoleMessageImpl.prototype = {
         case WebInspector.ConsoleMessage.MessageLevel.Error:
             element.addStyleClass("console-error-level");
             break;
+        case WebInspector.ConsoleMessage.MessageLevel.Info:
+            element.addStyleClass("console-info-level");
+            break;
         }
 
         if (this.type === WebInspector.ConsoleMessage.MessageType.StartGroup || this.type === WebInspector.ConsoleMessage.MessageType.StartGroupCollapsed)
@@ -976,6 +1001,9 @@ WebInspector.ConsoleMessageImpl.prototype = {
                 break;
             case WebInspector.ConsoleMessage.MessageLevel.Error:
                 levelString = "Error";
+                break;
+            case WebInspector.ConsoleMessage.MessageLevel.Info:
+                levelString = "Info";
                 break;
         }
 

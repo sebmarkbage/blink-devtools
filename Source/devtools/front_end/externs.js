@@ -195,6 +195,17 @@ function DOMFileSystem() {}
  */
 DOMFileSystem.prototype.root = null;
 
+// Drag and drop API
+/**
+ * @constructor
+ */
+function DataTransferItem() {}
+
+/**
+ * @return {Entry}
+ */
+DataTransferItem.prototype.webkitGetAsEntry = function() {}
+
 /** @type {Node} */
 Range.prototype.startContainer;
 
@@ -233,6 +244,7 @@ InspectorFrontendHostAPI.prototype.closeWindow = function() {}
 InspectorFrontendHostAPI.prototype.copyText = function(text) {}
 InspectorFrontendHostAPI.prototype.inspectedURLChanged = function(url) {}
 InspectorFrontendHostAPI.prototype.isolatedFileSystem = function(fileSystemId, registeredName) {}
+InspectorFrontendHostAPI.prototype.upgradeDraggedFileSystemPermissions = function(DOMFileSystem) {}
 InspectorFrontendHostAPI.prototype.loaded = function() {}
 InspectorFrontendHostAPI.prototype.localizedStringsURL = function() {}
 InspectorFrontendHostAPI.prototype.platform = function() {}
@@ -283,27 +295,6 @@ WebInspector.toggleSearchingForNode = function() {}
 WebInspector.panels = {};
 
 /**
- * @param {string} id
- * @param {string} title
- * @param {WebInspector.ViewFactory} viewFactory
- */
-WebInspector.registerViewInDrawer = function(id, title, viewFactory) {}
-
-/**
- * @param {string} id
- */
-WebInspector.showViewInDrawer = function(id) {}
-
-/**
- * @param {string} id
- * @param {string} title
- * @param {WebInspector.View} view
- */
-WebInspector.showCloseableViewInDrawer = function(id, title, view) {}
-
-WebInspector.closeDrawer = function() {}
-
-/**
  * @param {string=} messageLevel
  * @param {boolean=} showConsole
  */
@@ -327,6 +318,7 @@ WebInspector.queryParamsObject = {}
 
 /**
  * @param {Element} element
+ * @return {boolean}
  */
 WebInspector.showAnchorLocation = function(element) {}
 
@@ -337,6 +329,12 @@ WebInspector.Events = {
 
 /** @type {WebInspector.SettingsController} */
 WebInspector.settingsController;
+
+
+/**
+ * @return {number}
+ */
+WebInspector.zoomFactor = function() {}
 
 /** Extensions API */
 
@@ -399,6 +397,11 @@ WebInspector.inspectedPageDomain;
 
 WebInspector.SourceJavaScriptTokenizer = {}
 WebInspector.SourceJavaScriptTokenizer.Keywords = {}
+
+/**
+ * @return {boolean}
+ */
+WebInspector.isInspectingDevice = function() {}
 
 var InspectorTest = {}
 

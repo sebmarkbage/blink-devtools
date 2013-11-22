@@ -139,8 +139,9 @@ WebInspector.HeapSnapshotSortableDataGrid.prototype = {
 
     /**
      * @param {HeapProfilerAgent.HeapSnapshotObjectId} heapSnapshotObjectId
+     * @param {function(boolean)} callback
      */
-    highlightObjectByHeapSnapshotId: function(heapSnapshotObjectId)
+    highlightObjectByHeapSnapshotId: function(heapSnapshotObjectId, callback)
     {
     },
 
@@ -294,11 +295,6 @@ WebInspector.HeapSnapshotViewportDataGrid.prototype = {
     updateVisibleNodes: function()
     {
         var scrollTop = this.scrollContainer.scrollTop;
-
-        var viewPortHeight = this.scrollContainer.offsetHeight;
-
-        this._removePaddingRows();
-
         var children = this._topLevelNodes;
 
         var i = 0;
@@ -313,12 +309,22 @@ WebInspector.HeapSnapshotViewportDataGrid.prototype = {
             ++i;
         }
 
+        this._addVisibleNodes(i, scrollTop - topPadding, topPadding);
+    },
+
+    _addVisibleNodes: function(firstVisibleNodeIndex, firstNodeHiddenHeight, topPadding)
+    {
+        var viewPortHeight = this.scrollContainer.offsetHeight;
+        this._removePaddingRows();
+
+        var children = this._topLevelNodes;
         var selectedNode = this.selectedNode;
 
         this.rootNode().removeChildren();
         // The height of the view port + invisible top part.
-        var heightToFill = viewPortHeight + (scrollTop - topPadding);
+        var heightToFill = viewPortHeight + firstNodeHiddenHeight;
         var filledHeight = 0;
+        var i = firstVisibleNodeIndex;
         while (i < children.length && filledHeight < heightToFill) {
             if (children[i].revealed) {
                 this.rootNode().appendChild(children[i]);
@@ -343,6 +349,25 @@ WebInspector.HeapSnapshotViewportDataGrid.prototype = {
                 this.selectedNode = selectedNode;
             }
         }
+    },
+
+    _revealTopLevelNode: function(nodeToReveal)
+    {
+        var children = this._topLevelNodes;
+
+        var i = 0;
+        var topPadding = 0;
+        while (i < children.length) {
+            if (children[i] === nodeToReveal)
+                break;
+            if (children[i].revealed) {
+                var newTop = topPadding + children[i].nodeHeight();
+                topPadding = newTop;
+            }
+            ++i;
+        }
+
+        this._addVisibleNodes(i, 0, topPadding);
     },
 
     appendTopLevelNode: function(node)
@@ -594,8 +619,9 @@ WebInspector.HeapSnapshotConstructorsDataGrid.prototype = {
     /**
      * @override
      * @param {HeapProfilerAgent.HeapSnapshotObjectId} id
+     * @param {function(boolean)} callback
      */
-    highlightObjectByHeapSnapshotId: function(id)
+    highlightObjectByHeapSnapshotId: function(id, callback)
     {
         if (!this.snapshot) {
             this._objectIdToSelect = id;
@@ -604,11 +630,20 @@ WebInspector.HeapSnapshotConstructorsDataGrid.prototype = {
 
         function didGetClassName(className)
         {
+            if (!className) {
+                callback(false);
+                return;
+            }
             var constructorNodes = this.topLevelNodes();
             for (var i = 0; i < constructorNodes.length; i++) {
                 var parent = constructorNodes[i];
                 if (parent._name === className) {
-                    parent.revealNodeBySnapshotObjectId(parseInt(id, 10));
+                    if (!parent.dataGrid) {
+                        // Make sure Constructor node is within the view port and added
+                        // to the data grid
+                        this._revealTopLevelNode(parent);
+                    }
+                    parent.revealNodeBySnapshotObjectId(parseInt(id, 10), callback);
                     return;
                 }
             }
@@ -623,7 +658,7 @@ WebInspector.HeapSnapshotConstructorsDataGrid.prototype = {
             this._populateChildren();
 
         if (this._objectIdToSelect) {
-            this.highlightObjectByHeapSnapshotId(this._objectIdToSelect);
+            this.highlightObjectByHeapSnapshotId(this._objectIdToSelect, function(found) {});
             this._objectIdToSelect = null;
         }
     },
@@ -809,7 +844,7 @@ WebInspector.HeapSnapshotDominatorsDataGrid.prototype = {
         this.rootNode().sort();
 
         if (this._objectIdToSelect) {
-            this.highlightObjectByHeapSnapshotId(this._objectIdToSelect);
+            this.highlightObjectByHeapSnapshotId(this._objectIdToSelect, function(found) {});
             this._objectIdToSelect = null;
         }
     },
@@ -822,11 +857,13 @@ WebInspector.HeapSnapshotDominatorsDataGrid.prototype = {
     /**
      * @override
      * @param {HeapProfilerAgent.HeapSnapshotObjectId} id
+     * @param {function(boolean)} callback
      */
-    highlightObjectByHeapSnapshotId: function(id)
+    highlightObjectByHeapSnapshotId: function(id, callback)
     {
         if (!this.snapshot) {
             this._objectIdToSelect = id;
+            callback(false);
             return;
         }
 
@@ -834,6 +871,7 @@ WebInspector.HeapSnapshotDominatorsDataGrid.prototype = {
         {
             if (!dominatorIds) {
                 WebInspector.log(WebInspector.UIString("Cannot find corresponding heap snapshot node"));
+                callback(false);
                 return;
             }
             var dominatorNode = this.rootNode();
@@ -844,11 +882,13 @@ WebInspector.HeapSnapshotDominatorsDataGrid.prototype = {
         {
             if (!dominatorNode) {
                 console.error("Cannot find dominator node");
+                callback(false);
                 return;
             }
             if (!dominatorIds.length) {
                 this.highlightNode(dominatorNode);
                 dominatorNode.element.scrollIntoViewIfNeeded(true);
+                callback(true);
                 return;
             }
             var snapshotObjectId = dominatorIds.pop();

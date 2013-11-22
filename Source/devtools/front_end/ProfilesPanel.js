@@ -344,8 +344,9 @@ WebInspector.ProfileHeader.prototype = {
 
 /**
  * @constructor
- * @extends {WebInspector.Panel}
+ * @implements {WebInspector.Searchable}
  * @implements {WebInspector.ContextMenu.Provider}
+ * @extends {WebInspector.Panel}
  * @param {string=} name
  * @param {WebInspector.ProfileType=} type
  */
@@ -361,6 +362,12 @@ WebInspector.ProfilesPanel = function(name, type)
 
     this.createSidebarViewWithTree();
 
+    this.splitView.mainElement.addStyleClass("vbox");
+    this.splitView.sidebarElement.addStyleClass("vbox");
+
+    this._searchableView = new WebInspector.SearchableView(this);
+    this._searchableView.show(this.splitView.mainElement);
+
     this.profilesItemTreeElement = new WebInspector.ProfilesSidebarTreeElement(this);
     this.sidebarTree.appendChild(this.profilesItemTreeElement);
 
@@ -369,12 +376,13 @@ WebInspector.ProfilesPanel = function(name, type)
 
     this.profileViews = document.createElement("div");
     this.profileViews.id = "profile-views";
-    this.splitView.mainElement.appendChild(this.profileViews);
+    this.profileViews.addStyleClass("vbox");
+    this._searchableView.element.appendChild(this.profileViews);
 
     var statusBarContainer = this.splitView.mainElement.createChild("div", "profiles-status-bar");
     this._statusBarElement = statusBarContainer.createChild("div", "status-bar");
 
-    var sidebarTreeBox = this.sidebarElement.createChild("div", "fill profiles-sidebar-tree-box");
+    var sidebarTreeBox = this.sidebarElement.createChild("div", "profiles-sidebar-tree-box");
     sidebarTreeBox.appendChild(this.sidebarTreeElement);
     var statusBarContainerLeft = this.sidebarElement.createChild("div", "profiles-status-bar");
     this._statusBarButtons = statusBarContainerLeft.createChild("div", "status-bar");
@@ -387,8 +395,8 @@ WebInspector.ProfilesPanel = function(name, type)
     this.clearResultsButton.addEventListener("click", this._clearProfiles, this);
     this._statusBarButtons.appendChild(this.clearResultsButton.element);
 
-    this._profileTypeStatusBarItemsContainer = this._statusBarElement.createChild("div", "status-bar-items");
-    this._profileViewStatusBarItemsContainer = this._statusBarElement.createChild("div", "status-bar-items");
+    this._profileTypeStatusBarItemsContainer = this._statusBarElement.createChild("div");
+    this._profileViewStatusBarItemsContainer = this._statusBarElement.createChild("div");
 
     if (singleProfileMode) {
         this._launcherView = this._createLauncherView();
@@ -404,6 +412,7 @@ WebInspector.ProfilesPanel = function(name, type)
         this._registerProfileType(new WebInspector.TrackingHeapSnapshotProfileType(this));
         if (!WebInspector.WorkerManager.isWorkerFrontend() && WebInspector.experimentsSettings.canvasInspection.isEnabled())
             this._registerProfileType(new WebInspector.CanvasProfileType());
+        this._launcherView.restoreSelectedProfileType();
     }
 
     this._reset();
@@ -419,6 +428,14 @@ WebInspector.ProfilesPanel = function(name, type)
 }
 
 WebInspector.ProfilesPanel.prototype = {
+    /**
+     * @return {WebInspector.SearchableView}
+     */
+    searchableView: function()
+    {
+        return this._searchableView;
+    },
+
     _createFileSelectorElement: function()
     {
         if (this._fileSelectorElement)
@@ -521,7 +538,6 @@ WebInspector.ProfilesPanel.prototype = {
     _updateProfileTypeSpecificUI: function()
     {
         this.recordButton.title = this._selectedProfileType.buttonTooltip;
-
         this._launcherView.updateProfileType(this._selectedProfileType);
         this._profileTypeStatusBarItemsContainer.removeChildren();
         var statusBarItems = this._selectedProfileType.statusBarItems;
@@ -550,6 +566,7 @@ WebInspector.ProfilesPanel.prototype = {
 
         this.sidebarTreeElement.removeStyleClass("some-expandable");
 
+        this._launcherView.detach();
         this.profileViews.removeChildren();
         this._profileViewStatusBarItemsContainer.removeChildren();
 
@@ -566,7 +583,7 @@ WebInspector.ProfilesPanel.prototype = {
     {
         this.closeVisibleView();
         this._profileViewStatusBarItemsContainer.removeChildren();
-        this._launcherView.show(this.splitView.mainElement);
+        this._launcherView.show(this.profileViews);
         this.visibleView = this._launcherView;
     },
 
@@ -803,7 +820,11 @@ WebInspector.ProfilesPanel.prototype = {
                 this._showProfile(profile);
                 var view = profile.view(this);
                 view.changeView(viewName, function() {
-                    view.dataGrid.highlightObjectByHeapSnapshotId(snapshotObjectId);
+                    function didHighlightObject(found) {
+                        if (!found)
+                            WebInspector.log("Cannot find corresponding heap snapshot node", WebInspector.ConsoleMessage.MessageLevel.Error, true);
+                    }
+                    view.dataGrid.highlightObjectByHeapSnapshotId(snapshotObjectId, didHighlightObject.bind(this));
                 });
                 break;
             }
@@ -880,144 +901,44 @@ WebInspector.ProfilesPanel.prototype = {
     {
         this.searchCanceled();
 
-        var searchableViews = this._searchableViews();
-        if (!searchableViews || !searchableViews.length)
-            return;
-
         var visibleView = this.visibleView;
-
-        var matchesCountUpdateTimeout = null;
-
-        function updateMatchesCount()
-        {
-            WebInspector.searchController.updateSearchMatchesCount(this._totalSearchMatches, this);
-            WebInspector.searchController.updateCurrentMatchIndex(this._currentSearchResultIndex, this);
-            matchesCountUpdateTimeout = null;
-        }
-
-        function updateMatchesCountSoon()
-        {
-            if (matchesCountUpdateTimeout)
-                return;
-            // Update the matches count every half-second so it doesn't feel twitchy.
-            matchesCountUpdateTimeout = setTimeout(updateMatchesCount.bind(this), 500);
-        }
+        if (!visibleView)
+            return;
 
         function finishedCallback(view, searchMatches)
         {
             if (!searchMatches)
                 return;
-
-            this._totalSearchMatches += searchMatches;
-            this._searchResults.push(view);
-
-            this.searchMatchFound(view, searchMatches);
-
-            updateMatchesCountSoon.call(this);
-
-            if (shouldJump && view === visibleView)
+            this._searchableView.updateSearchMatchesCount(searchMatches);
+            this._searchResultsView = view;
+            if (shouldJump) {
                 view.jumpToFirstSearchResult();
-        }
-
-        var i = 0;
-        var panel = this;
-        var boundFinishedCallback = finishedCallback.bind(this);
-        var chunkIntervalIdentifier = null;
-
-        // Split up the work into chunks so we don't block the
-        // UI thread while processing.
-
-        function processChunk()
-        {
-            var view = searchableViews[i];
-
-            if (++i >= searchableViews.length) {
-                if (panel._currentSearchChunkIntervalIdentifier === chunkIntervalIdentifier)
-                    delete panel._currentSearchChunkIntervalIdentifier;
-                clearInterval(chunkIntervalIdentifier);
+                this._searchableView.updateCurrentMatchIndex(view.currentSearchResultIndex());
             }
-
-            if (!view)
-                return;
-
-            view.currentQuery = query;
-            view.performSearch(query, boundFinishedCallback);
         }
 
-        processChunk();
-
-        chunkIntervalIdentifier = setInterval(processChunk, 25);
-        this._currentSearchChunkIntervalIdentifier = chunkIntervalIdentifier;
+        visibleView.currentQuery = query;
+        visibleView.performSearch(query, finishedCallback.bind(this));
     },
 
     jumpToNextSearchResult: function()
     {
-        if (!this.showView || !this._searchResults || !this._searchResults.length)
+        if (!this._searchResultsView)
             return;
-
-        var showFirstResult = false;
-
-        this._currentSearchResultIndex = this._searchResults.indexOf(this.visibleView);
-        if (this._currentSearchResultIndex === -1) {
-            this._currentSearchResultIndex = 0;
-            showFirstResult = true;
-        }
-
-        var currentView = this._searchResults[this._currentSearchResultIndex];
-
-        if (currentView.showingLastSearchResult()) {
-            if (++this._currentSearchResultIndex >= this._searchResults.length)
-                this._currentSearchResultIndex = 0;
-            currentView = this._searchResults[this._currentSearchResultIndex];
-            showFirstResult = true;
-        }
-
-        WebInspector.searchController.updateCurrentMatchIndex(this._currentSearchResultIndex, this);
-
-        if (currentView !== this.visibleView) {
-            this.showView(currentView);
-            WebInspector.searchController.showSearchField();
-        }
-
-        if (showFirstResult)
-            currentView.jumpToFirstSearchResult();
-        else
-            currentView.jumpToNextSearchResult();
+        if (this._searchResultsView !== this.visibleView)
+            return;
+        this._searchResultsView.jumpToNextSearchResult();
+        this._searchableView.updateCurrentMatchIndex(this._searchResultsView.currentSearchResultIndex());
     },
 
     jumpToPreviousSearchResult: function()
     {
-        if (!this.showView || !this._searchResults || !this._searchResults.length)
+        if (!this._searchResultsView)
             return;
-
-        var showLastResult = false;
-
-        this._currentSearchResultIndex = this._searchResults.indexOf(this.visibleView);
-        if (this._currentSearchResultIndex === -1) {
-            this._currentSearchResultIndex = 0;
-            showLastResult = true;
-        }
-
-        var currentView = this._searchResults[this._currentSearchResultIndex];
-
-        if (currentView.showingFirstSearchResult()) {
-            if (--this._currentSearchResultIndex < 0)
-                this._currentSearchResultIndex = (this._searchResults.length - 1);
-            currentView = this._searchResults[this._currentSearchResultIndex];
-            showLastResult = true;
-        }
-
-        WebInspector.searchController.updateCurrentMatchIndex(this._currentSearchResultIndex, this);
-
-        if (currentView !== this.visibleView) {
-            this.showView(currentView);
-            WebInspector.searchController.showSearchField();
-        }
-
-        if (showLastResult)
-            currentView.jumpToLastSearchResult();
-        else
-            currentView.jumpToPreviousSearchResult();
+        if (this._searchResultsView !== this.visibleView)
+            return;
+        this._searchResultsView.jumpToPreviousSearchResult();
+        this._searchableView.updateCurrentMatchIndex(this._searchResultsView.currentSearchResultIndex());
     },
 
     /**
@@ -1031,57 +952,15 @@ WebInspector.ProfilesPanel.prototype = {
         return profiles;
     },
 
-    /**
-     * @return {!Array.<!WebInspector.View>}
-     */
-    _searchableViews: function()
-    {
-        var profiles = this._getAllProfiles();
-        var searchableViews = [];
-        for (var i = 0; i < profiles.length; ++i) {
-            var view = profiles[i].view(this);
-            if (view.performSearch)
-                searchableViews.push(view)
-        }
-        var index = searchableViews.indexOf(this.visibleView);
-        if (index > 0) {
-            // Move visibleView to the first position.
-            searchableViews[index] = searchableViews[0];
-            searchableViews[0] = this.visibleView;
-        }
-        return searchableViews;
-    },
-
-    searchMatchFound: function(view, matches)
-    {
-        view.profile._profilesTreeElement.searchMatches = matches;
-    },
-
     searchCanceled: function()
     {
-        if (this._searchResults) {
-            for (var i = 0; i < this._searchResults.length; ++i) {
-                var view = this._searchResults[i];
-                if (view.searchCanceled)
-                    view.searchCanceled();
-                delete view.currentQuery;
-            }
+        if (this._searchResultsView) {
+            if (this._searchResultsView.searchCanceled)
+                this._searchResultsView.searchCanceled();
+            this._searchResultsView.currentQuery = null;
+            this._searchResultsView = null;
         }
-
-        WebInspector.Panel.prototype.searchCanceled.call(this);
-
-        if (this._currentSearchChunkIntervalIdentifier) {
-            clearInterval(this._currentSearchChunkIntervalIdentifier);
-            delete this._currentSearchChunkIntervalIdentifier;
-        }
-
-        this._totalSearchMatches = 0;
-        this._currentSearchResultIndex = 0;
-        this._searchResults = [];
-
-        var profiles = this._getAllProfiles();
-        for (var i = 0; i < profiles.length; ++i)
-            profiles[i]._profilesTreeElement.searchMatches = 0;
+        this._searchableView.updateSearchMatchesCount(0);
     },
 
     /**
@@ -1190,20 +1069,6 @@ WebInspector.ProfileSidebarTreeElement.prototype = {
     {
         this._mainTitle = x;
         this.refreshTitles();
-    },
-
-    set searchMatches(matches)
-    {
-        if (!matches) {
-            if (!this.bubbleElement)
-                return;
-            this.bubbleElement.removeStyleClass("search-matches");
-            this.bubbleText = "";
-            return;
-        }
-
-        this.bubbleText = matches;
-        this.bubbleElement.addStyleClass("search-matches");
     },
 
     /**
@@ -1332,7 +1197,6 @@ importScript("ProfileDataGridTree.js");
 importScript("AllocationProfile.js");
 importScript("BottomUpProfileDataGridTree.js");
 importScript("CPUProfileView.js");
-importScript("FlameChart.js");
 importScript("HeapSnapshot.js");
 importScript("HeapSnapshotDataGrids.js");
 importScript("HeapSnapshotGridNodes.js");

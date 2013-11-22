@@ -31,6 +31,8 @@
 .screencast-navigation {
     -webkit-flex-direction: row;
     display: -webkit-flex;
+    height: 25px;
+    position: relative;
 }
 
 .screencast-navigation button {
@@ -76,13 +78,23 @@
     -webkit-flex: 1;
     border: 1px solid #aaa;
     border-radius: 2px;
-    margin: 3px;
+    margin: 1px;
     padding-left: 5px;
 }
 
 .screencast-navigation input:focus {
     border: 1px solid #aaa;
     outline: none !important;
+}
+
+.screencast-navigation .progress {
+    background-color: rgb(66, 129, 235);
+    height: 3px;
+    left: 0;
+    position: absolute;
+    top: 100%;  /* Align with the bottom edge of the parent. */
+    width: 0;
+    z-index: 2;  /* Above .screencast-glasspane. */
 }
 
 .screencast-viewport {
@@ -135,6 +147,6 @@
   left: 0;
   position: absolute;
   right: 0;
-  top: 29px;
+  top: 25px;  /* Align with the botton edge of .screencast .navigation. */
   font-size: 30px;
 }

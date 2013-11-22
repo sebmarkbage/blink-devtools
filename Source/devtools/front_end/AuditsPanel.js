@@ -39,6 +39,8 @@ WebInspector.AuditsPanel = function()
     this.registerRequiredCSS("auditsPanel.css");
 
     this.createSidebarViewWithTree();
+    this.splitView.mainElement.addStyleClass("vbox");
+
     this.auditsTreeElement = new WebInspector.SidebarSectionTreeElement("", {}, true);
     this.sidebarTree.appendChild(this.auditsTreeElement);
     this.auditsTreeElement.listItemElement.addStyleClass("hidden");
@@ -61,6 +63,14 @@ WebInspector.AuditsPanel = function()
 }
 
 WebInspector.AuditsPanel.prototype = {
+    /**
+     * @return {boolean}
+     */
+    canSearch: function()
+    {
+        return false;
+    },
+
     /**
      * @return {!Object.<string, !WebInspector.AuditCategory>}
      */

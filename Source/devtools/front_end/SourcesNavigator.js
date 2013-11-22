@@ -74,7 +74,7 @@ WebInspector.SourcesNavigator.ContentScriptsTab = "contentScripts";
 WebInspector.SourcesNavigator.SnippetsTab = "snippets";
 
 WebInspector.SourcesNavigator.prototype = {
-    /*
+    /**
      * @return {WebInspector.View}
      */
     get view()
@@ -228,7 +228,7 @@ WebInspector.SnippetsNavigatorView.prototype = {
     {
         if (uiSourceCode.project().type() !== WebInspector.projectTypes.Snippets)
             return;
-        uiSourceCode.project().deleteFile(uiSourceCode);
+        uiSourceCode.project().deleteFile(uiSourceCode.path());
     },
 
     _handleCreateSnippet: function()

@@ -48,6 +48,7 @@ WebInspector.DOMNode = function(domAgent, doc, isInShadowTree, payload) {
     this._localName = payload.localName;
     this._nodeValue = payload.nodeValue;
     this._pseudoType = payload.pseudoType;
+    this._shadowRootType = payload.shadowRootType;
 
     this._shadowRoots = [];
 
@@ -112,6 +113,11 @@ WebInspector.DOMNode = function(domAgent, doc, isInShadowTree, payload) {
 WebInspector.DOMNode.PseudoElementNames = {
     Before: "before",
     After: "after"
+}
+
+WebInspector.DOMNode.ShadowRootTypes = {
+    UserAgent: "user-agent",
+    Author: "author"
 }
 
 /**
@@ -227,6 +233,14 @@ WebInspector.DOMNode.prototype = {
     isInShadowTree: function()
     {
         return this._isInShadowTree;
+    },
+
+    /**
+     * @return {?string}
+     */
+    shadowRootType: function()
+    {
+        return this._shadowRootType || null;
     },
 
     /**
@@ -443,32 +457,6 @@ WebInspector.DOMNode.prototype = {
         }
         path.reverse();
         return path.join(",");
-    },
-
-    /**
-     * @param {boolean} justSelector
-     * @return {string}
-     */
-    appropriateSelectorFor: function(justSelector)
-    {
-        var lowerCaseName = this.localName() || this.nodeName().toLowerCase();
-
-        var id = this.getAttribute("id");
-        if (id) {
-            var selector = "#" + id;
-            return (justSelector ? selector : lowerCaseName + selector);
-        }
-
-        var className = this.getAttribute("class");
-        if (className) {
-            var selector = "." + className.trim().replace(/\s+/g, ".");
-            return (justSelector ? selector : lowerCaseName + selector);
-        }
-
-        if (lowerCaseName === "input" && this.getAttribute("type"))
-            return lowerCaseName + "[type=\"" + this.getAttribute("type") + "\"]";
-
-        return lowerCaseName;
     },
 
     /**
