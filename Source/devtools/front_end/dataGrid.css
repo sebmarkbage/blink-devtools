@@ -22,7 +22,7 @@
 
 .data-grid .data-container {
     position: absolute;
-    top: 16px;
+    top: 17px;
     bottom: 0;
     left: 0;
     right: 0;
@@ -45,11 +45,12 @@
 
 .data-grid th {
     text-align: left;
-    background-image: url(Images/glossyHeader.png);
-    background-repeat: repeat-x;
-    border-left: 1px solid rgb(179, 179, 179);
-    border-bottom: 1px solid rgb(179, 179, 179);
-    height: 15px;
+    background-color: rgb(236, 236, 236);
+    border: 1px solid rgb(179, 179, 179);
+    border-top: none;
+    border-right: none;
+    height: 16px;
+    line-height: 16px;
     font-weight: normal;
     vertical-align: middle;
     padding: 0 4px;
@@ -83,8 +84,8 @@
     bottom: 0;
     height: 100%;
     border-top: 0 none transparent;
-    background-image: -webkit-gradient(linear, left top, left bottom, from(white), color-stop(0.5, white), color-stop(0.5, rgb(234, 243, 255)), to(rgb(234, 243, 255)));
-    background-size: 1px 32px;
+    background-image: linear-gradient(to bottom, white, white 50%, rgb(234, 243, 255) 50%, rgb(234, 243, 255));
+    background-size: 128px 32px;
     table-layout: fixed;
 }
 
@@ -103,7 +104,7 @@
 .data-grid td {
     vertical-align: top;
     height: 16px; /* Keep in sync with .data-grid table.data @ background-size */
-    line-height: 13px;
+    line-height: 14px;
     padding: 1px 4px;
     white-space: nowrap;
     overflow: hidden;
@@ -140,18 +141,7 @@
 }
 
 .data-grid th.sortable:active {
-    background-image: url(Images/glossyHeaderPressed.png);
-}
-.data-grid th.sort-ascending,
-.data-grid th.sort-descending {
-    border-left: 1px solid rgb(107, 140, 196);
-    border-bottom: 1px solid rgb(107, 140, 196);
-    background-image: url(Images/glossyHeaderSelected.png);
-    background-repeat: repeat-x;
-}
-
-.data-grid th.sortable.sort-ascending:active, .data-grid th.sortable.sort-descending:active {
-    background-image: url(Images/glossyHeaderSelectedPressed.png);
+    background-color: rgba(0, 0, 0, 0.15);
 }
 
 .data-grid th.sort-ascending > div::after,
@@ -160,7 +150,7 @@
     top: 1px;
     right: 0;
     background-image: url(Images/statusbarButtonGlyphs.png);
-    background-size: 320px 120px;
+    background-size: 320px 144px;
     opacity: 0.5;
     width: 8px;
     height: 10px;
@@ -171,7 +161,7 @@
 @media (-webkit-min-device-pixel-ratio: 1.5) {
 .data-grid th.sort-ascending > div::after,
 .data-grid th.sort-descending > div::after {
-    background-image: url(Images/statusbarButtonGlyphs2x.png);
+    background-image: url(Images/statusbarButtonGlyphs_2x.png);
 }
 } /* media */
 
@@ -183,22 +173,19 @@
     background-position: -20px -96px;
 }
 
+.data-grid th:hover {
+    background-color: rgba(0, 0, 0, 0.1);
+}
+
 .data-grid button {
     line-height: 18px;
     color: inherit;
 }
 
-body.inactive .data-grid th.sort-ascending,
-body.inactive .data-grid th.sort-descending {
-    background-image: url(Images/glossyHeader.png);
-    border-left: 1px solid rgb(179, 179, 179);
-    border-bottom: 1px solid rgb(179, 179, 179);
-}
-
 .data-grid tr.parent td.disclosure::before {
     -webkit-user-select: none;
     -webkit-mask-image: url(Images/statusbarButtonGlyphs.png);
-    -webkit-mask-size: 320px 120px;
+    -webkit-mask-size: 320px 144px;
     float: left;
     width: 8px;
     margin-right: 2px;
@@ -215,7 +202,7 @@ body.inactive .data-grid th.sort-descending {
 
 @media (-webkit-min-device-pixel-ratio: 1.5) {
 .data-grid tr.parent td.disclosure::before {
-    -webkit-mask-image: url(Images/statusbarButtonGlyphs2x.png);
+    -webkit-mask-image: url(Images/statusbarButtonGlyphs_2x.png);
 }
 } /* media */
 
@@ -257,5 +244,4 @@ body.inactive .data-grid th.sort-descending {
     bottom: 0;
     width: 5px;
     z-index: 500;
-    cursor: col-resize;
 }

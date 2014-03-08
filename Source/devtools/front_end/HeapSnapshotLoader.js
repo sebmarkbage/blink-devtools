@@ -30,8 +30,7 @@
 
 /**
  * @constructor
- * @param{WebInspector.HeapSnapshotWorkerDispatcher} dispatcher
- * @implements {WebInspector.OutputStream}
+ * @param {!WebInspector.HeapSnapshotWorkerDispatcher} dispatcher
  */
 WebInspector.HeapSnapshotLoader = function(dispatcher)
 {
@@ -58,11 +57,13 @@ WebInspector.HeapSnapshotLoader.prototype = {
             this._parseStringsArray();
     },
 
+    /**
+     * @return {!WebInspector.JSHeapSnapshot}
+     */
     buildSnapshot: function(constructorName)
     {
         this._progress.updateStatus("Processing snapshot\u2026");
-        var constructor = WebInspector[constructorName];
-        var result = new constructor(this._snapshot, this._progress);
+        var result = new WebInspector.JSHeapSnapshot(this._snapshot, this._progress);
         this._reset();
         return result;
     },
@@ -134,10 +135,10 @@ WebInspector.HeapSnapshotLoader.prototype = {
                 break;
             }
             case "parse-snapshot-info": {
-                var closingBracketIndex = WebInspector.findBalancedCurlyBrackets(this._json);
+                var closingBracketIndex = WebInspector.TextUtils.findBalancedCurlyBrackets(this._json);
                 if (closingBracketIndex === -1)
                     return;
-                this._snapshot.snapshot = /** @type {HeapSnapshotHeader} */ (JSON.parse(this._json.slice(0, closingBracketIndex)));
+                this._snapshot.snapshot = /** @type {!HeapSnapshotHeader} */ (JSON.parse(this._json.slice(0, closingBracketIndex)));
                 this._json = this._json.slice(closingBracketIndex);
                 this._state = "find-nodes";
                 break;
@@ -191,7 +192,8 @@ WebInspector.HeapSnapshotLoader.prototype = {
                     return;
                 this._snapshot.edges = this._array;
                 this._array = null;
-                if (WebInspector.HeapSnapshot.enableAllocationProfiler)
+                // If there is allocation info parse it, otherwise jump straight to strings.
+                if (this._snapshot.snapshot.trace_function_count)
                     this._state = "find-trace-function-infos";
                 else
                     this._state = "find-strings";

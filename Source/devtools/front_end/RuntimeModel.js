@@ -31,7 +31,7 @@
 /**
  * @constructor
  * @extends {WebInspector.Object}
- * @param {WebInspector.ResourceTreeModel} resourceTreeModel
+ * @param {!WebInspector.ResourceTreeModel} resourceTreeModel
  */
 WebInspector.RuntimeModel = function(resourceTreeModel)
 {
@@ -49,7 +49,7 @@ WebInspector.RuntimeModel.Events = {
 
 WebInspector.RuntimeModel.prototype = {
     /**
-     * @param {WebInspector.ExecutionContext} executionContext
+     * @param {?WebInspector.ExecutionContext} executionContext
      */
     setCurrentExecutionContext: function(executionContext)
     {
@@ -57,7 +57,7 @@ WebInspector.RuntimeModel.prototype = {
     },
 
     /**
-     * @return {WebInspector.ExecutionContext}
+     * @return {?WebInspector.ExecutionContext}
      */
     currentExecutionContext: function()
     {
@@ -65,7 +65,7 @@ WebInspector.RuntimeModel.prototype = {
     },
 
     /**
-     * @return {Array.<WebInspector.FrameExecutionContextList>}
+     * @return {!Array.<!WebInspector.FrameExecutionContextList>}
      */
     contextLists: function()
     {
@@ -73,33 +73,42 @@ WebInspector.RuntimeModel.prototype = {
     },
 
     /**
-     * @param {WebInspector.ResourceTreeFrame} frame
-     * @return {WebInspector.FrameExecutionContextList}
+     * @param {!WebInspector.ResourceTreeFrame} frame
+     * @return {!WebInspector.FrameExecutionContextList}
      */
     contextListByFrame: function(frame)
     {
         return this._frameIdToContextList[frame.id];
     },
 
+    /**
+     * @param {!WebInspector.Event} event
+     */
     _frameAdded: function(event)
     {
-        var frame = event.data;
+        var frame = /** @type {!WebInspector.ResourceTreeFrame} */ (event.data);
         var context = new WebInspector.FrameExecutionContextList(frame);
         this._frameIdToContextList[frame.id] = context;
         this.dispatchEventToListeners(WebInspector.RuntimeModel.Events.FrameExecutionContextListAdded, context);
     },
 
+    /**
+     * @param {!WebInspector.Event} event
+     */
     _frameNavigated: function(event)
     {
-        var frame = event.data;
+        var frame = /** @type {!WebInspector.ResourceTreeFrame} */ (event.data);
         var context = this._frameIdToContextList[frame.id];
         if (context)
             context._frameNavigated(frame);
     },
 
+    /**
+     * @param {!WebInspector.Event} event
+     */
     _frameDetached: function(event)
     {
-        var frame = event.data;
+        var frame = /** @type {!WebInspector.ResourceTreeFrame} */ (event.data);
         var context = this._frameIdToContextList[frame.id];
         if (!context)
             return;
@@ -116,9 +125,7 @@ WebInspector.RuntimeModel.prototype = {
     _executionContextCreated: function(context)
     {
         var contextList = this._frameIdToContextList[context.frameId];
-        // FIXME(85708): this should never happen
-        if (!contextList)
-            return;
+        console.assert(contextList);
         contextList._addExecutionContext(new WebInspector.ExecutionContext(context.id, context.name, context.isPageContext));
     },
 
@@ -129,7 +136,7 @@ WebInspector.RuntimeModel.prototype = {
      * @param {boolean} doNotPauseOnExceptionsAndMuteConsole
      * @param {boolean} returnByValue
      * @param {boolean} generatePreview
-     * @param {function(?WebInspector.RemoteObject, boolean, RuntimeAgent.RemoteObject=)} callback
+     * @param {function(?WebInspector.RemoteObject, boolean, ?RuntimeAgent.RemoteObject=)} callback
      */
     evaluate: function(expression, objectGroup, includeCommandLineAPI, doNotPauseOnExceptionsAndMuteConsole, returnByValue, generatePreview, callback)
     {
@@ -145,7 +152,7 @@ WebInspector.RuntimeModel.prototype = {
 
         /**
          * @param {?Protocol.Error} error
-         * @param {RuntimeAgent.RemoteObject} result
+         * @param {!RuntimeAgent.RemoteObject} result
          * @param {boolean=} wasThrown
          */
         function evalCallback(error, result, wasThrown)
@@ -164,8 +171,8 @@ WebInspector.RuntimeModel.prototype = {
     },
 
     /**
-     * @param {Element} proxyElement
-     * @param {Range} wordRange
+     * @param {!Element} proxyElement
+     * @param {!Range} wordRange
      * @param {boolean} force
      * @param {function(!Array.<string>, number=)} completionsReadyCallback
      */
@@ -210,6 +217,9 @@ WebInspector.RuntimeModel.prototype = {
         else
             this.evaluate(expressionString, "completion", true, true, false, false, evaluated.bind(this));
 
+        /**
+         * @this {WebInspector.RuntimeModel}
+         */
         function evaluated(result, wasThrown)
         {
             if (!result || wasThrown) {
@@ -217,6 +227,10 @@ WebInspector.RuntimeModel.prototype = {
                 return;
             }
 
+            /**
+             * @param {string} primitiveType
+             * @this {WebInspector.RuntimeModel}
+             */
             function getCompletions(primitiveType)
             {
                 var object;
@@ -247,6 +261,12 @@ WebInspector.RuntimeModel.prototype = {
                 this.evaluate("(" + getCompletions + ")(\"" + result.type + "\")", "completion", false, true, true, false, receivedPropertyNamesFromEval.bind(this));
         }
 
+        /**
+         * @param {?WebInspector.RemoteObject} notRelevant
+         * @param {boolean} wasThrown
+         * @param {?RuntimeAgent.RemoteObject=} result
+         * @this {WebInspector.RuntimeModel}
+         */
         function receivedPropertyNamesFromEval(notRelevant, wasThrown, result)
         {
             if (result && !wasThrown)
@@ -255,6 +275,9 @@ WebInspector.RuntimeModel.prototype = {
                 completionsReadyCallback([]);
         }
 
+        /**
+         * @this {WebInspector.RuntimeModel}
+         */
         function receivedPropertyNames(propertyNames)
         {
             RuntimeAgent.releaseObjectGroup("completion");
@@ -279,7 +302,7 @@ WebInspector.RuntimeModel.prototype = {
      * @param {boolean} bracketNotation
      * @param {string} expressionString
      * @param {string} prefix
-     * @param {Array.<string>} properties
+     * @param {!Array.<string>} properties
      */
     _reportCompletions: function(completionsReadyCallback, dotNotation, bracketNotation, expressionString, prefix, properties) {
         if (bracketNotation) {
@@ -302,7 +325,8 @@ WebInspector.RuntimeModel.prototype = {
         for (var i = 0; i < properties.length; ++i) {
             var property = properties[i];
 
-            if (dotNotation && !/^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(property))
+            // Assume that all non-ASCII characters are letters and thus can be used as part of identifier.
+            if (dotNotation && !/^[a-zA-Z_$\u008F-\uFFFF][a-zA-Z0-9_$\u008F-\uFFFF]*$/.test(property))
                 continue;
 
             if (bracketNotation) {
@@ -325,14 +349,14 @@ WebInspector.RuntimeModel.prototype = {
 }
 
 /**
- * @type {WebInspector.RuntimeModel}
+ * @type {!WebInspector.RuntimeModel}
  */
-WebInspector.runtimeModel = null;
+WebInspector.runtimeModel;
 
 /**
  * @constructor
  * @implements {RuntimeAgent.Dispatcher}
- * @param {WebInspector.RuntimeModel} runtimeModel
+ * @param {!WebInspector.RuntimeModel} runtimeModel
  */
 WebInspector.RuntimeDispatcher = function(runtimeModel)
 {
@@ -348,7 +372,6 @@ WebInspector.RuntimeDispatcher.prototype = {
 
 /**
  * @constructor
- * @extends {WebInspector.Object}
  */
 WebInspector.ExecutionContext = function(id, name, isPageContext)
 {
@@ -375,6 +398,7 @@ WebInspector.ExecutionContext.comparator = function(a, b)
 /**
  * @constructor
  * @extends {WebInspector.Object}
+ * @param {!WebInspector.ResourceTreeFrame} frame
  */
 WebInspector.FrameExecutionContextList = function(frame)
 {
@@ -389,6 +413,9 @@ WebInspector.FrameExecutionContextList.EventTypes = {
 
 WebInspector.FrameExecutionContextList.prototype =
 {
+    /**
+     * @param {!WebInspector.ResourceTreeFrame} frame
+     */
     _frameNavigated: function(frame)
     {
         this._frame = frame;
@@ -406,11 +433,17 @@ WebInspector.FrameExecutionContextList.prototype =
         this.dispatchEventToListeners(WebInspector.FrameExecutionContextList.EventTypes.ContextAdded, this);
     },
 
+    /**
+     * @return {!Array.<!WebInspector.ExecutionContext>}
+     */
     executionContexts: function()
     {
         return this._executionContexts;
     },
 
+    /**
+     * @return {!WebInspector.ExecutionContext}
+     */
     mainWorldContext: function() 
     {
         return this._executionContexts[0];
@@ -418,6 +451,7 @@ WebInspector.FrameExecutionContextList.prototype =
 
     /**
      * @param {string} securityOrigin
+     * @return {?WebInspector.ExecutionContext}
      */
     contextBySecurityOrigin: function(securityOrigin)
     {
@@ -426,30 +460,31 @@ WebInspector.FrameExecutionContextList.prototype =
             if (!context.isMainWorldContext && context.name === securityOrigin)
                 return context; 
         }
+        return null;
     },
 
+    /**
+     * @return {string}
+     */
     get frameId()
     {
         return this._frame.id;
     },
 
+    /**
+     * @return {string}
+     */
     get url()
     {
         return this._frame.url;
     },
 
+    /**
+     * @return {string}
+     */
     get displayName()
     {
-        if (!this._frame.parentFrame)
-            return "<top frame>";
-        var name = this._frame.name || "";
-        var subtitle = new WebInspector.ParsedURL(this._frame.url).displayName;
-        if (subtitle) {
-            if (!name)
-                return subtitle;
-            return name + "( " + subtitle + " )";
-        }
-        return "<iframe>";
+        return this._frame.displayName();
     },
 
     __proto__: WebInspector.Object.prototype

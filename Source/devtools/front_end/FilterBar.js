@@ -39,7 +39,7 @@ WebInspector.FilterBar = function()
     this._element.className = "hbox";
 
     this._filterButton = new WebInspector.StatusBarButton(WebInspector.UIString("Filter"), "filters-toggle", 3);
-    this._filterButton.element.addEventListener("mousedown", this._handleFilterButtonClick.bind(this), false);
+    this._filterButton.element.addEventListener("click", this._handleFilterButtonClick.bind(this), false);
 
     this._filters = [];
 }
@@ -56,15 +56,15 @@ WebInspector.FilterBar.FilterBarState = {
 
 WebInspector.FilterBar.prototype = {
     /**
-     * @return {Element}
+     * @return {!WebInspector.StatusBarButton}
      */
     filterButton: function()
     {
-        return this._filterButton.element;
+        return this._filterButton;
     },
 
     /**
-     * @return {Element}
+     * @return {!Element}
      */
     filtersElement: function()
     {
@@ -80,7 +80,7 @@ WebInspector.FilterBar.prototype = {
     },
 
     /**
-     * @param {WebInspector.FilterUI} filter
+     * @param {!WebInspector.FilterUI} filter
      */
     addFilter: function(filter)
     {
@@ -91,7 +91,7 @@ WebInspector.FilterBar.prototype = {
     },
 
     /**
-     * @param {WebInspector.Event} event
+     * @param {!WebInspector.Event} event
      */
     _filterChanged: function(event)
     {
@@ -119,13 +119,28 @@ WebInspector.FilterBar.prototype = {
     },
 
     /**
-     * @param {Event} event
+     * @param {?Event} event
      */
     _handleFilterButtonClick: function(event)
     {
         this._filtersShown = !this._filtersShown;
         this._updateFilterButton();
         this.dispatchEventToListeners(WebInspector.FilterBar.Events.FiltersToggled, this._filtersShown);
+        if (this._filtersShown) {
+            for (var i = 0; i < this._filters.length; ++i) {
+                if (this._filters[i] instanceof WebInspector.TextFilterUI) {
+                    var textFilterUI = /** @type {!WebInspector.TextFilterUI} */ (this._filters[i]);
+                    textFilterUI.focus();
+                }
+            }
+        }
+    },
+
+    clear: function()
+    {
+        this._element.removeChildren();
+        this._filters = [];
+        this._updateFilterButton();
     },
 
     __proto__: WebInspector.Object.prototype
@@ -150,18 +165,23 @@ WebInspector.FilterUI.prototype = {
     isActive: function() { },
 
     /**
-     * @return {Element}
+     * @return {!Element}
      */
     element: function() { }
 }
 
 /**
  * @constructor
- * @implements {WebInspector.FilterUI}
  * @extends {WebInspector.Object}
+ * @implements {WebInspector.FilterUI}
+ * @implements {WebInspector.SuggestBoxDelegate}
+ * @param {boolean=} supportRegex
  */
-WebInspector.TextFilterUI = function()
+WebInspector.TextFilterUI = function(supportRegex)
 {
+    this._supportRegex = !!supportRegex;
+    this._regex = null;
+
     this._filterElement = document.createElement("div");
     this._filterElement.className = "filter-text-filter";
 
@@ -171,6 +191,25 @@ WebInspector.TextFilterUI = function()
     this._filterInputElement.addEventListener("mousedown", this._onFilterFieldManualFocus.bind(this), false); // when the search field is manually selected
     this._filterInputElement.addEventListener("input", this._onInput.bind(this), false);
     this._filterInputElement.addEventListener("change", this._onInput.bind(this), false);
+    this._filterInputElement.addEventListener("keydown", this._onInputKeyDown.bind(this), true);
+    this._filterInputElement.addEventListener("blur", this._onBlur.bind(this), true);
+
+    /** @type {?WebInspector.TextFilterUI.SuggestionBuilder} */
+    this._suggestionBuilder = null;
+
+    this._suggestBox = new WebInspector.SuggestBox(this, this._filterElement);
+
+    if (this._supportRegex) {
+        this._filterElement.classList.add("supports-regex");
+        this._regexCheckBox = this._filterElement.createChild("input");
+        this._regexCheckBox.type = "checkbox";
+        this._regexCheckBox.id = "text-filter-regex";
+        this._regexCheckBox.addEventListener("change", this._onInput.bind(this), false);
+
+        this._regexLabel = this._filterElement.createChild("label");
+        this._regexLabel.htmlFor = "text-filter-regex";
+        this._regexLabel.textContent = WebInspector.UIString("Regex");
+    }
 }
 
 WebInspector.TextFilterUI.prototype = {
@@ -183,7 +222,7 @@ WebInspector.TextFilterUI.prototype = {
     },
 
     /**
-     * @return {Element}
+     * @return {!Element}
      */
     element: function()
     {
@@ -204,7 +243,7 @@ WebInspector.TextFilterUI.prototype = {
     setValue: function(value)
     {
         this._filterInputElement.value = value;
-        this._valueChanged();
+        this._valueChanged(false);
     },
 
     /**
@@ -212,15 +251,11 @@ WebInspector.TextFilterUI.prototype = {
      */
     regex: function()
     {
-        if (this._regex !== undefined)
-            return this._regex;
-        var filterQuery = this.value();
-        this._regex = filterQuery ? createPlainTextSearchRegex(filterQuery, "i") : null;
         return this._regex;
     },
 
     /**
-     * @param {Event} event
+     * @param {?Event} event
      */
     _onFilterFieldManualFocus: function(event)
     {
@@ -228,19 +263,157 @@ WebInspector.TextFilterUI.prototype = {
     },
 
     /**
-     * @param {WebInspector.Event} event
+     * @param {?Event} event
+     */
+    _onBlur: function(event)
+    {
+        this._suggestBox.hide();
+    },
+
+    /**
+     * @param {!WebInspector.Event} event
      */
     _onInput: function(event)
     {
-        this._valueChanged();
+        this._valueChanged(true);
     },
 
-    _valueChanged: function() {
-        delete this._regex;
+    focus: function()
+    {
+        this._filterInputElement.focus();
+    },
+
+    /**
+     * @param {?WebInspector.TextFilterUI.SuggestionBuilder} suggestionBuilder
+     */
+    setSuggestionBuilder: function(suggestionBuilder)
+    {
+        this._suggestionBuilder = suggestionBuilder;
+        if (document.activeElement === this._filterInputElement)
+            this._updateSuggestions();
+    },
+
+    _updateSuggestions: function()
+    {
+        if (!this._suggestionBuilder) {
+            this._suggestBox.hide();
+            return;
+        }
+        var suggestions = this._suggestionBuilder.buildSuggestions(this._filterInputElement);
+        if (suggestions && suggestions.length) {
+            if (this._suppressSuggestion)
+                delete this._suppressSuggestion;
+            else
+                this._suggestionBuilder.applySuggestion(this._filterInputElement, suggestions[0], true);
+            this._suggestBox.updateSuggestions(null, suggestions, 0, true, "");
+        } else {
+            this._suggestBox.hide();
+        }
+    },
+
+    /**
+     * @param {boolean} showSuggestions
+     */
+    _valueChanged: function(showSuggestions)
+    {
+        if (showSuggestions)
+            this._updateSuggestions();
+        else
+            this._suggestBox.hide();
+
+        var filterQuery = this.value();
+
+        this._regex = null;
+        this._filterInputElement.classList.remove("filter-text-invalid");
+        if (filterQuery) {
+            if (this._supportRegex && this._regexCheckBox.checked) {
+                try {
+                    this._regex = new RegExp(filterQuery, "i");
+                } catch (e) {
+                    this._filterInputElement.classList.add("filter-text-invalid");
+                }
+            } else {
+                this._regex = createPlainTextSearchRegex(filterQuery, "i");
+            }
+        }
+
+        this._dispatchFilterChanged();
+    },
+
+    _dispatchFilterChanged: function()
+    {
         this.dispatchEventToListeners(WebInspector.FilterUI.Events.FilterChanged, null);
     },
 
+    /**
+     * @param {!KeyboardEvent} event
+     * @return {boolean}
+     */
+    _onInputKeyDown: function(event)
+    {
+        var handled = false;
+        if (event.keyIdentifier === "U+0008") { // Backspace
+            this._suppressSuggestion = true;
+        } else if (this._suggestBox.visible()) {
+            if (event.keyIdentifier === "U+001B") { // Esc
+                this._suggestBox.hide();
+                handled = true;
+            } else if (event.keyIdentifier === "U+0009") { // Tab
+                this._suggestBox.acceptSuggestion();
+                handled = true;
+            } else {
+                handled = this._suggestBox.keyPressed(event);
+            }
+        }
+        if (handled)
+            event.consume(true);
+        return handled;
+    },
+
+    /**
+     * @override
+     * @param {string} suggestion
+     * @param {boolean=} isIntermediateSuggestion
+     */
+    applySuggestion: function(suggestion, isIntermediateSuggestion)
+    {
+        if (!this._suggestionBuilder)
+            return;
+        this._suggestionBuilder.applySuggestion(this._filterInputElement, suggestion, !!isIntermediateSuggestion);
+        if (isIntermediateSuggestion)
+            this._dispatchFilterChanged();
+    },
+
+    /** @override */
+    acceptSuggestion: function()
+    {
+        this._filterInputElement.scrollLeft = this._filterInputElement.scrollWidth;
+        this._valueChanged(true);
+    },
+
     __proto__: WebInspector.Object.prototype
+}
+
+/**
+ * @interface
+ */
+WebInspector.TextFilterUI.SuggestionBuilder = function()
+{
+}
+
+WebInspector.TextFilterUI.SuggestionBuilder.prototype = {
+    /**
+     * @param {!HTMLInputElement} input
+     * @return {?Array.<string>}
+     */
+    buildSuggestions: function(input) { },
+
+    /**
+     * @param {!HTMLInputElement} input
+     * @param {string} suggestion
+     * @param {boolean} isIntermediate
+     */
+    applySuggestion: function(input, suggestion, isIntermediate) { },
 }
 
 /**
@@ -284,7 +457,7 @@ WebInspector.NamedBitSetFilterUI.prototype = {
     },
 
     /**
-     * @return {Element}
+     * @return {!Element}
      */
     element: function()
     {
@@ -318,7 +491,7 @@ WebInspector.NamedBitSetFilterUI.prototype = {
             this._allowedTypes[WebInspector.NamedBitSetFilterUI.ALL_TYPES] = true;
         }
         for (var typeName in this._typeFilterElements)
-            this._typeFilterElements[typeName].enableStyleClass("selected", this._allowedTypes[typeName]);
+            this._typeFilterElements[typeName].classList.toggle("selected", this._allowedTypes[typeName]);
         this.dispatchEventToListeners(WebInspector.FilterUI.Events.FilterChanged, null);
     },
 
@@ -374,7 +547,7 @@ WebInspector.NamedBitSetFilterUI.prototype = {
  * @constructor
  * @implements {WebInspector.FilterUI}
  * @extends {WebInspector.Object}
- * @param {Array.<{value: *, label: string, title: string}>} options
+ * @param {!Array.<!{value: *, label: string, title: string}>} options
  */
 WebInspector.ComboBoxFilterUI = function(options)
 {
@@ -404,7 +577,7 @@ WebInspector.ComboBoxFilterUI.prototype = {
     },
 
     /**
-     * @return {Element}
+     * @return {!Element}
      */
     element: function()
     {
@@ -422,7 +595,23 @@ WebInspector.ComboBoxFilterUI.prototype = {
     },
 
     /**
-     * @param {Event} event
+     * @param {number} index
+     */
+    setSelectedIndex: function(index)
+    {
+        this._filterComboBox.setSelectedIndex(index);
+    },
+
+    /**
+     * @return {number}
+     */
+    selectedIndex: function(index)
+    {
+        return this._filterComboBox.selectedIndex();
+    },
+
+    /**
+     * @param {?Event} event
      */
     _filterChanged: function(event)
     {
@@ -441,7 +630,7 @@ WebInspector.ComboBoxFilterUI.prototype = {
  * @param {string} className
  * @param {string} title
  * @param {boolean=} activeWhenChecked
- * @param {WebInspector.Setting=} setting
+ * @param {!WebInspector.Setting=} setting
  */
 WebInspector.CheckboxFilterUI = function(className, title, activeWhenChecked, setting)
 {
@@ -470,7 +659,7 @@ WebInspector.CheckboxFilterUI.prototype = {
     },
 
     /**
-     * @return {Element}
+     * @return {!Element}
      */
     element: function()
     {
@@ -485,9 +674,18 @@ WebInspector.CheckboxFilterUI.prototype = {
         return this._checked;
     },
 
+    /**
+     * @param {boolean} state
+     */
+    setState: function(state)
+    {
+        this._checked = state;
+        this._update();
+    },
+
     _update: function()
     {
-        this._checkElement.enableStyleClass("checkbox-filter-checkbox-checked", this._checked);
+        this._checkElement.classList.toggle("checkbox-filter-checkbox-checked", this._checked);
         this.dispatchEventToListeners(WebInspector.FilterUI.Events.FilterChanged, null);
     },
 
@@ -498,7 +696,7 @@ WebInspector.CheckboxFilterUI.prototype = {
     },
 
     /**
-     * @param {Event} event
+     * @param {?Event} event
      */
     _onClick: function(event)
     {

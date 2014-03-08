@@ -147,7 +147,6 @@
     padding: 3px;
     margin: 3px;
     min-width: 80px;
-    text-align: center;
     overflow: visible;
 }
 
@@ -158,6 +157,7 @@
 .metrics .editing {
     position: relative;
     z-index: 100;
+    cursor: text;
 }
 
 .metrics .left {
@@ -204,7 +204,7 @@
     height: 16px;
 }
 
-.styles-section.read-only {
+.styles-section.read-only:not(.computed-style) {
     background-color: rgb(240, 240, 240);
 }
 
@@ -363,7 +363,7 @@
 .styles-section.matched-styles .properties li.parent .expand-element {
     -webkit-user-select: none;
     background-image: url(Images/statusbarButtonGlyphs.png);
-    background-size: 320px 120px;
+    background-size: 320px 144px;
     margin-right: 2px;
     margin-left: -6px;
     opacity: 0.55;
@@ -374,7 +374,7 @@
 
 @media (-webkit-min-device-pixel-ratio: 1.5) {
 .styles-section.matched-styles .properties li.parent .expand-element {
-    background-image: url(Images/statusbarButtonGlyphs2x.png);
+    background-image: url(Images/statusbarButtonGlyphs_2x.png);
 }
 } /* media */
 
@@ -427,6 +427,10 @@
     color: inherit;
 }
 
+.styles-section.computed-style .properties {
+    margin-top: 18px;
+}
+
 .styles-section.computed-style .properties .disabled {
     text-decoration: none;
     opacity: 0.5;
@@ -461,9 +465,9 @@
     border-spacing: 0;
 }
 
-.styles-element-state-pane input {
-    margin: 2px;
-    vertical-align: -2px;
+.styles-element-state-pane label {
+    display: flex;
+    margin: 1px;
 }
 
 .styles-selector {
@@ -474,7 +478,7 @@
     display: none;
 }
 
-.body.show-inherited .styles-section .properties .inherited {
+.styles-section.styles-show-inherited .properties .inherited {
     display: block;
 }
 
@@ -522,7 +526,7 @@
 .event-bars .event-bar .header::before {
     -webkit-user-select: none;
     background-image: url(Images/statusbarButtonGlyphs.png);
-    background-size: 320px 120px;
+    background-size: 320px 144px;
     opacity: 0.5;
     content: "a";
     color: transparent;
@@ -535,7 +539,7 @@
 
 @media (-webkit-min-device-pixel-ratio: 1.5) {
 .event-bars .event-bar .header::before {
-    background-image: url(Images/statusbarButtonGlyphs2x.png);
+    background-image: url(Images/statusbarButtonGlyphs_2x.png);
 }
 } /* media */
 
@@ -614,12 +618,26 @@
     border-bottom: none;
 }
 
+.styles-section.computed-style > .header > .sidebar-pane-subtitle {
+    top: 4px;
+    left: 8px;
+    -webkit-user-select: none;
+}
+
+.styles-section.computed-style > .header > .sidebar-pane-subtitle > input {
+    vertical-align: middle;
+}
+
 .sidebar-pane.composite .sidebar-pane-toolbar > .sidebar-pane-subtitle {
     left: 8px;
 }
 
-.sidebar-pane.composite .styles-section.read-only {
-    background-color: inherit;
+.sidebar-pane > .body > .split-view {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    right: 0;
 }
 
 .panel.elements .sidebar-pane-toolbar > select {
@@ -662,4 +680,14 @@
 .styles-section:not(.read-only) span.simple-selector.styles-panel-hovered {
     text-decoration: underline;
     cursor: default;
+}
+
+.styles-clipboard-only {
+    display: inline-block;
+    width: 0;
+    opacity: 0;
+}
+
+li.child-editing .styles-clipboard-only {
+    display: none;
 }

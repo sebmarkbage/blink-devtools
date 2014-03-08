@@ -34,6 +34,19 @@
     position: relative;
 }
 
+.profile-view .data-grid table.data {
+    background: white;
+}
+
+.profile-view .data-grid tr:not(.filler):hover td {
+    background-color: rgba(0, 0, 0, 0.1);
+}
+
+.profiles.panel .status-bar {
+    border-bottom: 1px solid rgb(202, 202, 202);
+    border-top: none;
+}
+
 .profiles-status-bar {
     background-color: rgb(236, 236, 236);
     flex: 0 0 23px;
@@ -45,6 +58,11 @@
 }
 
 .profiles-sidebar-tree-box {
+    overflow: auto;
+    flex: auto;
+}
+
+.profiles-sidebar-tree-box > ol {
     overflow: auto;
     flex: auto;
 }
@@ -61,7 +79,17 @@
     content: url(Images/profileGroupIcon.png);
 }
 
-.profile-view {
+.sidebar-tree-item .title-container > .save-link {
+    text-decoration: underline;
+    margin-left: auto;
+    display: none;
+}
+
+.sidebar-tree-item.selected .title-container > .save-link {
+    display: block;
+}
+
+.cpu-profile-view {
     display: none;
     overflow: hidden;
     position: absolute;
@@ -71,57 +99,57 @@
     bottom: 0;
 }
 
-.profile-view.visible {
-    display: block;
+.cpu-profile-view.visible {
+    display: flex;
 }
 
-.profile-view .data-grid {
+.cpu-profile-view .data-grid {
     border: none;
-    height: 100%;
+    flex: auto;
 }
 
-.profile-view .data-grid th.average-column {
+.cpu-profile-view .data-grid th.average-column {
     text-align: center;
 }
 
-.profile-view .data-grid td.average-column {
+.cpu-profile-view .data-grid td.average-column {
     text-align: right;
 }
 
-.profile-view .data-grid th.self-column {
+.cpu-profile-view .data-grid th.self-column {
     text-align: center;
 }
 
-.profile-view .data-grid td.self-column {
+.cpu-profile-view .data-grid td.self-column {
     text-align: right;
 }
 
-.profile-view .data-grid th.total-column {
+.cpu-profile-view .data-grid th.total-column {
     text-align: center;
 }
 
-.profile-view .data-grid td.total-column {
+.cpu-profile-view .data-grid td.total-column {
     text-align: right;
 }
 
-.profile-view .data-grid .calls-column {
+.cpu-profile-view .data-grid .calls-column {
     text-align: center;
 }
 
 .profile-node-file {
     float: right;
     color: gray;
-    margin-top: -1px;
 }
 
 .profile-warn-marker {
     background-image: url(Images/statusbarButtonGlyphs.png);
-    background-size: 320px 120px;
-    background-position: -201px -105px;
-    padding-left: 14px;
+    background-size: 320px 144px;
+    background-position: -202px -107px;
     width: 10px;
     height: 10px;
     vertical-align: -1px;
+    margin-right: 2px;
+    display: inline-block;
 }
 
 .data-grid tr.selected .profile-node-file {
@@ -159,6 +187,11 @@
 
 .control-profiling {
     -webkit-align-self: flex-start;
+    margin-right: 50px;
+}
+
+.profile-launcher-view > .profile-launcher-view-content > .load-profile {
+    margin-left: 20px;
 }
 
 .profile-launcher-view-content h1 {
@@ -181,11 +214,6 @@
     margin-left: 22px;
 }
 
-.panel-enabler-view.profile-launcher-view button:not(.status-bar-item) {
-    color: rgb(6, 6, 6);
-    margin: 0 0 16px;
-}
-
 .profile-launcher-view-content button.running:not(.status-bar-item) {
     color: red;
 }
@@ -206,6 +234,7 @@ body.inactive .profile-launcher-view-content button.running:not(.status-bar-item
 .profile-canvas-decoration .warning-icon-small {
     margin-right: 4px;
 }
+
 .profile-canvas-decoration {
     color: red;
     margin: -14px 0 13px 22px;
@@ -214,4 +243,10 @@ body.inactive .profile-launcher-view-content button.running:not(.status-bar-item
 
 .profile-canvas-decoration button {
     margin: 0 0 0 10px !important;
+}
+
+.profile-entry-info {
+    position: absolute;
+    top: 20px;
+    left: 20px;
 }

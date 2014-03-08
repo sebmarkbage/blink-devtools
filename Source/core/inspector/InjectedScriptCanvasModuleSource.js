@@ -40,7 +40,7 @@ var TypeUtils = {
     /**
      * http://www.khronos.org/registry/typedarray/specs/latest/#7
      * @const
-     * @type {!Array.<function(new:ArrayBufferView, ArrayBufferView)>}
+     * @type {!Array.<function(new:ArrayBufferView, (ArrayBuffer|ArrayBufferView), number=, number=)>}
      */
     _typedArrayClasses: (function(typeNames) {
         var result = [];
@@ -59,7 +59,7 @@ var TypeUtils = {
 
     /**
      * @param {*} array
-     * @return {function(new:ArrayBufferView, ArrayBufferView)|null}
+     * @return {function(new:ArrayBufferView, (ArrayBuffer|ArrayBufferView), number=, number=)|null}
      */
     typedArrayClass: function(array)
     {
@@ -268,8 +268,8 @@ function StackTraceV8(stackTraceLimit, topMostFunctionToIgnore)
 
     /**
      * @param {Object} error
-     * @param {Array.<CallSite>} structuredStackTrace
-     * @return {Array.<{sourceURL: string, lineNumber: number, columnNumber: number}>}
+     * @param {!Array.<CallSite>} structuredStackTrace
+     * @return {!Array.<{sourceURL: string, lineNumber: number, columnNumber: number}>}
      */
     Error.prepareStackTrace = function(error, structuredStackTrace)
     {
@@ -282,7 +282,7 @@ function StackTraceV8(stackTraceLimit, topMostFunctionToIgnore)
         });
     }
 
-    var holder = /** @type {{stack: Array.<{sourceURL: string, lineNumber: number, columnNumber: number}>}} */ ({});
+    var holder = /** @type {{stack: !Array.<{sourceURL: string, lineNumber: number, columnNumber: number}>}} */ ({});
     Error.captureStackTrace(holder, topMostFunctionToIgnore || arguments.callee);
     this._stackTrace = holder.stack;
 
@@ -364,7 +364,7 @@ Cache.prototype = {
  * @constructor
  * @param {Resource|Object} thisObject
  * @param {string} functionName
- * @param {Array|Arguments} args
+ * @param {!Array|Arguments} args
  * @param {Resource|*=} result
  * @param {StackTrace=} stackTrace
  */
@@ -539,11 +539,6 @@ Call.prototype = {
         var attachments = replayableCall.attachments();
         if (attachments)
             this._attachments = TypeUtils.cloneObject(attachments);
-
-        var thisResource = Resource.forObject(replayObject);
-        if (thisResource)
-            thisResource.onCallReplayed(this);
-
         return this;
     }
 }
@@ -552,7 +547,7 @@ Call.prototype = {
  * @constructor
  * @param {ReplayableResource} thisObject
  * @param {string} functionName
- * @param {Array.<ReplayableResource|*>} args
+ * @param {!Array.<ReplayableResource|*>} args
  * @param {ReplayableResource|*} result
  * @param {StackTrace} stackTrace
  * @param {Object.<string, Object>} attachments
@@ -612,7 +607,7 @@ ReplayableCall.prototype = {
     },
 
     /**
-     * @return {Array.<ReplayableResource|*>}
+     * @return {!Array.<ReplayableResource|*>}
      */
     args: function()
     {
@@ -987,7 +982,7 @@ Resource.prototype = {
         var proxy = Object.create(wrappedObject.__proto__); // In order to emulate "instanceof".
 
         var customWrapFunctions = this._customWrapFunctions();
-        /** @type {Array.<string>} */
+        /** @type {!Array.<string>} */
         this._proxyStatePropertyNames = [];
 
         /**
@@ -1120,7 +1115,7 @@ Resource.prototype = {
  * @param {Object} originalObject
  * @param {Function} originalFunction
  * @param {string} functionName
- * @param {Array|Arguments} args
+ * @param {!Array|Arguments} args
  */
 Resource.WrapFunction = function(originalObject, originalFunction, functionName, args)
 {
@@ -1869,6 +1864,73 @@ WebGLBufferResource.prototype = {
     },
 
     /**
+     * @return {?ArrayBufferView}
+     */
+    cachedBufferData: function()
+    {
+        /**
+         * Creates a view to a given buffer, does NOT copy the buffer.
+         * @param {!ArrayBuffer|!ArrayBufferView} buffer
+         * @return {!Uint8Array}
+         */
+        function createUint8ArrayBufferView(buffer)
+        {
+            return buffer instanceof ArrayBuffer ? new Uint8Array(buffer) : new Uint8Array(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+        }
+
+        if (!this._cachedBufferData) {
+            for (var i = this._calls.length - 1; i >= 0; --i) {
+                var call = this._calls[i];
+                if (call.functionName() === "bufferData") {
+                    var sizeOrData = /** @type {number|ArrayBuffer|ArrayBufferView} */ (call.args()[1]);
+                    if (typeof sizeOrData === "number")
+                        this._cachedBufferData = new ArrayBuffer(sizeOrData);
+                    else
+                        this._cachedBufferData = sizeOrData;
+                    this._lastBufferSubDataIndex = i + 1;
+                    break;
+                }
+            }
+            if (!this._cachedBufferData)
+                return null;
+        }
+
+        // Apply any "bufferSubData" calls that have not been applied yet.
+        var bufferDataView;
+        while (this._lastBufferSubDataIndex < this._calls.length) {
+            var call = this._calls[this._lastBufferSubDataIndex++];
+            if (call.functionName() !== "bufferSubData")
+                continue;
+            var offset = /** @type {number} */ (call.args()[1]);
+            var data = /** @type {!ArrayBuffer|!ArrayBufferView} */ (call.args()[2]);
+            var view = createUint8ArrayBufferView(data);
+            if (!bufferDataView)
+                bufferDataView = createUint8ArrayBufferView(this._cachedBufferData);
+            bufferDataView.set(view, offset);
+
+            var isFullReplacement = (offset === 0 && bufferDataView.length === view.length);
+            if (this._cachedBufferData instanceof ArrayBuffer) {
+                // The buffer data has no type yet. Try to guess from the "bufferSubData" call.
+                var typedArrayClass = TypeUtils.typedArrayClass(data);
+                if (typedArrayClass)
+                    this._cachedBufferData = new typedArrayClass(this._cachedBufferData); // Does not copy the buffer.
+            } else if (isFullReplacement) {
+                var typedArrayClass = TypeUtils.typedArrayClass(data);
+                if (typedArrayClass) {
+                    var typedArrayData = /** @type {!ArrayBufferView} */ (data);
+                    this._cachedBufferData = new typedArrayClass(this._cachedBufferData.buffer, this._cachedBufferData.byteOffset, typedArrayData.length); // Does not copy the buffer.
+                }
+            }
+        }
+
+        if (this._cachedBufferData instanceof ArrayBuffer) {
+            // If we failed to guess the data type yet, use Uint8Array.
+            return new Uint8Array(this._cachedBufferData);
+        }
+        return this._cachedBufferData;
+    },
+
+    /**
      * @override
      * @return {!Array.<TypeUtils.InternalResourceStateDescriptor>}
      */
@@ -1910,16 +1972,34 @@ WebGLBufferResource.prototype = {
 
         if (oldBuffer !== buffer)
             gl.bindBuffer(target, oldBuffer);
+
+        try {
+            var data = this.cachedBufferData();
+            if (data)
+                result.push({ name: "bufferData", value: data });
+        } catch (e) {
+            console.error("Exception while restoring bufferData", e);
+        }
+
         return result;
     },
 
     /**
-     * @override
      * @param {!Call} call
      */
-    pushCall: function(call)
+    pushCall_bufferData: function(call)
     {
         // FIXME: remove any older calls that no longer contribute to the resource state.
+        delete this._cachedBufferData;
+        delete this._lastBufferSubDataIndex;
+        WebGLBoundResource.prototype.pushCall.call(this, call);
+    },
+
+    /**
+     * @param {!Call} call
+     */
+    pushCall_bufferSubData: function(call)
+    {
         // FIXME: Optimize memory for bufferSubData.
         WebGLBoundResource.prototype.pushCall.call(this, call);
     },
@@ -2823,6 +2903,16 @@ WebGLRenderingContextResource.prototype = {
         case "getExtension":
             this.registerWebGLExtension(args[0], /** @type {Object} */ (call.result()));
             break;
+        case "bufferData":
+            var resource = /** @type {WebGLBufferResource} */ (this.currentBinding(args[0]));
+            if (resource)
+                resource.pushCall_bufferData(call);
+            break;
+        case "bufferSubData":
+            var resource = /** @type {WebGLBufferResource} */ (this.currentBinding(args[0]));
+            if (resource)
+                resource.pushCall_bufferSubData(call);
+            break;
         }
     },
 
@@ -2844,43 +2934,13 @@ WebGLRenderingContextResource.prototype = {
             wrapFunctions["createRenderbuffer"] = Resource.WrapFunction.resourceFactoryMethod(WebGLRenderbufferResource, "WebGLRenderbuffer");
             wrapFunctions["getUniformLocation"] = Resource.WrapFunction.resourceFactoryMethod(WebGLUniformLocationResource, "WebGLUniformLocation");
 
-            /**
-             * @param {string} methodName
-             * @param {function(this:Resource, !Call)=} pushCallFunc
-             */
-            function stateModifyingWrapFunction(methodName, pushCallFunc)
-            {
-                if (pushCallFunc) {
-                    /**
-                     * @param {Object|number} target
-                     * @this Resource.WrapFunction
-                     */
-                    wrapFunctions[methodName] = function(target)
-                    {
-                        var resource = this._resource.currentBinding(target);
-                        if (resource)
-                            pushCallFunc.call(resource, this.call());
-                    }
-                } else {
-                    /**
-                     * @param {Object|number} target
-                     * @this Resource.WrapFunction
-                     */
-                    wrapFunctions[methodName] = function(target)
-                    {
-                        var resource = this._resource.currentBinding(target);
-                        if (resource)
-                            resource.pushCall(this.call());
-                    }
-                }
-            }
             stateModifyingWrapFunction("bindAttribLocation");
             stateModifyingWrapFunction("compileShader");
             stateModifyingWrapFunction("detachShader");
             stateModifyingWrapFunction("linkProgram");
             stateModifyingWrapFunction("shaderSource");
-            stateModifyingWrapFunction("bufferData");
-            stateModifyingWrapFunction("bufferSubData");
+            stateModifyingWrapFunction("bufferData", WebGLBufferResource.prototype.pushCall_bufferData);
+            stateModifyingWrapFunction("bufferSubData", WebGLBufferResource.prototype.pushCall_bufferSubData);
             stateModifyingWrapFunction("compressedTexImage2D");
             stateModifyingWrapFunction("compressedTexSubImage2D");
             stateModifyingWrapFunction("copyTexImage2D", WebGLTextureResource.prototype.pushCall_copyTexImage2D);
@@ -2993,6 +3053,38 @@ WebGLRenderingContextResource.prototype = {
 
             WebGLRenderingContextResource._wrapFunctions = wrapFunctions;
         }
+
+        /**
+         * @param {string} methodName
+         * @param {function(this:Resource, !Call)=} pushCallFunc
+         */
+        function stateModifyingWrapFunction(methodName, pushCallFunc)
+        {
+            if (pushCallFunc) {
+                /**
+                 * @param {Object|number} target
+                 * @this Resource.WrapFunction
+                 */
+                wrapFunctions[methodName] = function(target)
+                {
+                    var resource = this._resource.currentBinding(target);
+                    if (resource)
+                        pushCallFunc.call(resource, this.call());
+                }
+            } else {
+                /**
+                 * @param {Object|number} target
+                 * @this Resource.WrapFunction
+                 */
+                wrapFunctions[methodName] = function(target)
+                {
+                    var resource = this._resource.currentBinding(target);
+                    if (resource)
+                        resource.pushCall(this.call());
+                }
+            }
+        }
+
         return wrapFunctions;
     },
 
@@ -3387,27 +3479,6 @@ CanvasRenderingContext2DResource.prototype = {
             wrapFunctions["createRadialGradient"] = Resource.WrapFunction.resourceFactoryMethod(LogEverythingResource, "CanvasGradient");
             wrapFunctions["createPattern"] = Resource.WrapFunction.resourceFactoryMethod(LogEverythingResource, "CanvasPattern");
 
-            /**
-             * @param {string} methodName
-             * @param {function(this:Resource, !Call)=} func
-             */
-            function stateModifyingWrapFunction(methodName, func)
-            {
-                if (func) {
-                    /** @this Resource.WrapFunction */
-                    wrapFunctions[methodName] = function()
-                    {
-                        func.call(this._resource, this.call());
-                    }
-                } else {
-                    /** @this Resource.WrapFunction */
-                    wrapFunctions[methodName] = function()
-                    {
-                        this._resource.pushCall(this.call());
-                    }
-                }
-            }
-
             for (var i = 0, methodName; methodName = CanvasRenderingContext2DResource.TransformationMatrixMethods[i]; ++i)
                 stateModifyingWrapFunction(methodName, methodName === "setTransform" ? this.pushCall_setTransform : undefined);
             for (var i = 0, methodName; methodName = CanvasRenderingContext2DResource.PathMethods[i]; ++i)
@@ -3419,6 +3490,28 @@ CanvasRenderingContext2DResource.prototype = {
 
             CanvasRenderingContext2DResource._wrapFunctions = wrapFunctions;
         }
+
+        /**
+         * @param {string} methodName
+         * @param {function(this:Resource, !Call)=} func
+         */
+        function stateModifyingWrapFunction(methodName, func)
+        {
+            if (func) {
+                /** @this Resource.WrapFunction */
+                wrapFunctions[methodName] = function()
+                {
+                    func.call(this._resource, this.call());
+                }
+            } else {
+                /** @this Resource.WrapFunction */
+                wrapFunctions[methodName] = function()
+                {
+                    this._resource.pushCall(this.call());
+                }
+            }
+        }
+
         return wrapFunctions;
     },
 
@@ -3906,12 +3999,14 @@ CallFormatter.register("WebGLRenderingContext", new WebGLCallFormatter(WebGLRend
  */
 function TraceLog()
 {
-    /** @type {!Array.<ReplayableCall>} */
+    /** @type {!Array.<!ReplayableCall>} */
     this._replayableCalls = [];
     /** @type {!Cache.<ReplayableResource>} */
     this._replayablesCache = new Cache();
     /** @type {!Object.<number, boolean>} */
     this._frameEndCallIndexes = {};
+    /** @type {!Object.<number, boolean>} */
+    this._resourcesCreatedInThisTraceLog = {};
 }
 
 TraceLog.prototype = {
@@ -3924,7 +4019,7 @@ TraceLog.prototype = {
     },
 
     /**
-     * @return {!Array.<ReplayableCall>}
+     * @return {!Array.<!ReplayableCall>}
      */
     replayableCalls: function()
     {
@@ -3941,6 +4036,15 @@ TraceLog.prototype = {
     },
 
     /**
+     * @param {number} resourceId
+     * @return {boolean}
+     */
+    createdInThisTraceLog: function(resourceId)
+    {
+        return !!this._resourcesCreatedInThisTraceLog[resourceId];
+    },
+
+    /**
      * @param {!Resource} resource
      */
     captureResource: function(resource)
@@ -3953,6 +4057,9 @@ TraceLog.prototype = {
      */
     addCall: function(call)
     {
+        var resource = Resource.forObject(call.result());
+        if (resource && !this._replayablesCache.has(resource.id()))
+            this._resourcesCreatedInThisTraceLog[resource.id()] = true;
         this._replayableCalls.push(call.toReplayable(this._replayablesCache));
     },
 
@@ -4020,16 +4127,8 @@ TraceLogPlayer.prototype = {
     },
 
     /**
-     * @return {Call}
-     */
-    step: function()
-    {
-        return this.stepTo(this._nextReplayStep);
-    },
-
-    /**
      * @param {number} stepNum
-     * @return {Call}
+     * @return {{replayTime:number, lastCall:(!Call)}}
      */
     stepTo: function(stepNum)
     {
@@ -4037,20 +4136,50 @@ TraceLogPlayer.prototype = {
         console.assert(stepNum >= 0);
         if (this._nextReplayStep > stepNum)
             this.reset();
-        // FIXME: Replay all the cached resources first to warm-up.
-        var lastCall = null;
+
+        // Replay the calls' arguments first to warm-up, before measuring the actual replay time.
+        this._replayCallArguments(stepNum);
+
         var replayableCalls = this._traceLog.replayableCalls();
-        while (this._nextReplayStep <= stepNum)
-            lastCall = replayableCalls[this._nextReplayStep++].replay(this._replayWorldCache);
-        return lastCall;
+        var replayedCalls = [];
+        replayedCalls.length = stepNum - this._nextReplayStep + 1;
+
+        var beforeTime = TypeUtils.now();
+        for (var i = 0; this._nextReplayStep <= stepNum; ++this._nextReplayStep, ++i)
+            replayedCalls[i] = replayableCalls[this._nextReplayStep].replay(this._replayWorldCache);
+        var replayTime = Math.max(0, TypeUtils.now() - beforeTime);
+
+        for (var i = 0, call; call = replayedCalls[i]; ++i)
+            call.resource().onCallReplayed(call);
+
+        return {
+            replayTime: replayTime,
+            lastCall: replayedCalls[replayedCalls.length - 1]
+        };
     },
 
     /**
-     * @return {Call}
+     * @param {number} stepNum
      */
-    replay: function()
+    _replayCallArguments: function(stepNum)
     {
-        return this.stepTo(this._traceLog.size() - 1);
+        /**
+         * @param {*} obj
+         */
+        function replayIfNotCreatedInThisTraceLog(obj)
+        {
+            if (!(obj instanceof ReplayableResource))
+                return;
+            var replayableResource = /** @type {!ReplayableResource} */ (obj);
+            if (!this._traceLog.createdInThisTraceLog(replayableResource.id()))
+                replayableResource.replay(this._replayWorldCache)
+        }
+        var replayableCalls = this._traceLog.replayableCalls();
+        for (var i = this._nextReplayStep; i <= stepNum; ++i) {
+            replayIfNotCreatedInThisTraceLog.call(this, replayableCalls[i].replayableResource());
+            replayIfNotCreatedInThisTraceLog.call(this, replayableCalls[i].result());
+            replayableCalls[i].args().forEach(replayIfNotCreatedInThisTraceLog.bind(this));
+        }
     }
 }
 
@@ -4292,9 +4421,9 @@ InjectedCanvasModule.prototype = {
         var alive = this._manager.capturing() && this._manager.lastTraceLog() === traceLog;
         var result = {
             id: id,
-            /** @type {Array.<CanvasAgent.Call>} */
+            /** @type {!Array.<!CanvasAgent.Call>} */
             calls: [],
-            /** @type {Array.<CanvasAgent.CallArgument>} */
+            /** @type {!Array.<!CanvasAgent.CallArgument>} */
             contexts: [],
             alive: alive,
             startOffset: fromIndex,
@@ -4334,14 +4463,10 @@ InjectedCanvasModule.prototype = {
         if (!traceLog)
             return "Error: Trace log with the given ID not found.";
         this._traceLogPlayers[traceLogId] = this._traceLogPlayers[traceLogId] || new TraceLogPlayer(traceLog);
-
         injectedScript.releaseObjectGroup(traceLogId);
 
-        var beforeTime = TypeUtils.now();
-        var lastCall = this._traceLogPlayers[traceLogId].stepTo(stepNo);
-        var replayTime = Math.max(0, TypeUtils.now() - beforeTime);
-
-        var resource = lastCall.resource();
+        var replayResult = this._traceLogPlayers[traceLogId].stepTo(stepNo);
+        var resource = replayResult.lastCall.resource();
         var dataURL = resource.toDataURL();
         if (!dataURL) {
             resource = resource.contextResource();
@@ -4349,7 +4474,7 @@ InjectedCanvasModule.prototype = {
         }
         return {
             resourceState: this._makeResourceState(resource.id(), traceLogId, resource, dataURL),
-            replayTime: replayTime
+            replayTime: replayResult.replayTime
         };
     },
 

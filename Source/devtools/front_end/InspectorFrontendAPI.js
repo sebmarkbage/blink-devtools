@@ -61,18 +61,18 @@ var InspectorFrontendAPI = {
         InspectorFrontendAPI._runOnceLoaded(function() {
             var uiSourceCode = WebInspector.workspace.uiSourceCodeForURL(url);
             if (uiSourceCode) {
-                WebInspector.showPanel("sources").showUISourceCode(uiSourceCode, lineNumber, columnNumber);
+                WebInspector.Revealer.reveal(new WebInspector.UILocation(uiSourceCode, lineNumber, columnNumber));
                 return;
             }
 
             /**
-             * @param {WebInspector.Event} event
+             * @param {!WebInspector.Event} event
              */
             function listener(event)
             {
-                var uiSourceCode = /** @type {WebInspector.UISourceCode} */ (event.data);
+                var uiSourceCode = /** @type {!WebInspector.UISourceCode} */ (event.data);
                 if (uiSourceCode.url === url) {
-                    WebInspector.showPanel("sources").showUISourceCode(uiSourceCode, lineNumber, columnNumber);
+                    WebInspector.Revealer.reveal(new WebInspector.UILocation(uiSourceCode, lineNumber, columnNumber));
                     WebInspector.workspace.removeEventListener(WebInspector.Workspace.Events.UISourceCodeAdded, listener);
                 }
             }
@@ -96,24 +96,21 @@ var InspectorFrontendAPI = {
     loadTimelineFromURL: function(url)
     {
         InspectorFrontendAPI._runOnceLoaded(function() {
-            /** @type {WebInspector.TimelinePanel} */ (WebInspector.showPanel("timeline")).loadFromURL(url);
+            /** @type {!WebInspector.TimelinePanel} */ (WebInspector.showPanel("timeline")).loadFromURL(url);
         });
     },
 
-    // FIXME: remove this legacy support.
-    setAttachedWindow: function(side)
+    /**
+     * @param {boolean} useSoftMenu
+     */
+    setUseSoftMenu: function(useSoftMenu)
     {
-    },
-
-    // FIXME: remove this legacy support.
-    setDockSide: function(side)
-    {
-        WebInspector.dockController.setDockSide(side);
+        WebInspector.ContextMenu.setUseSoftMenu(useSoftMenu);
     },
 
     dispatchMessage: function(messageObject)
     {
-        InspectorBackend.dispatch(messageObject);
+        InspectorBackend.connection().dispatch(messageObject);
     },
 
     // Callbacks to the methods called from within initialized front-end.
@@ -179,6 +176,14 @@ var InspectorFrontendAPI = {
     /**
      * @param {string} url
      */
+    canceledSaveURL: function(url)
+    {
+        WebInspector.fileManager.canceledSaveURL(url);
+    },
+
+    /**
+     * @param {string} url
+     */
     appendedToURL: function(url)
     {
         WebInspector.fileManager.appendedToURL(url);
@@ -207,7 +212,7 @@ var InspectorFrontendAPI = {
     },
 
     /**
-     * @param {Object} queryParamsObject
+     * @param {!Object} queryParamsObject
      */
     dispatchQueryParameters: function(queryParamsObject)
     {
@@ -252,11 +257,11 @@ var InspectorFrontendAPI = {
     }
 }
 
-if (window.opener && window.dispatchStandaloneTestRunnerMessages) {
-    function onMessageFromOpener(event)
-    {
-        if (event.source === window.opener)
-            InspectorFrontendAPI._dispatch(event.data);
-    }
-    window.addEventListener("message", onMessageFromOpener, true);
+function onMessageFromOpener(event)
+{
+    if (event.source === window.opener)
+        InspectorFrontendAPI._dispatch(event.data);
 }
+
+if (window.opener && window.dispatchStandaloneTestRunnerMessages)
+    window.addEventListener("message", onMessageFromOpener, true);

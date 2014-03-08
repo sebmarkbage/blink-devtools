@@ -35,27 +35,39 @@
 WebInspector.InspectorView = function()
 {
     WebInspector.View.call(this);
-    this.markAsRoot();
-    this.element.classList.add("fill", "vbox", "inspector-view");
-    this.element.setAttribute("spellcheck", false);
+    WebInspector.Dialog.setModalHostView(this);
+
+    // DevTools sidebar is a vertical split of panels tabbed pane and a drawer.
+    this._drawerSplitView = new WebInspector.SplitView(false, true, "Inspector.drawerSplitViewState", 200, 200);
+    this._drawerSplitView.hideSidebar();
+    this._drawerSplitView.enableShowModeSaving();
+    this._drawerSplitView.setSidebarElementConstraints(Preferences.minDrawerHeight, Preferences.minDrawerHeight);
+    this._drawerSplitView.setMainElementConstraints(25, 25);
+    this._drawerSplitView.show(this.element);
 
     this._tabbedPane = new WebInspector.TabbedPane();
-    this._tabbedPane.setRetainTabsOrder(true);
-    this._tabbedPane.show(this.element);
+    this._tabbedPane.setRetainTabOrder(true, WebInspector.moduleManager.orderComparator(WebInspector.Panel, "name", "order"));
+    this._tabbedPane.show(this._drawerSplitView.mainElement());
+    this._drawer = new WebInspector.Drawer(this._drawerSplitView);
 
-    var toolbarElement = document.createElement("div");
-    toolbarElement.className = "toolbar toolbar-background";
+    // Patch tabbed pane header with toolbar actions.
+    this._toolbarElement = document.createElement("div");
+    this._toolbarElement.className = "toolbar toolbar-background";
     var headerElement = this._tabbedPane.headerElement();
-    headerElement.parentElement.insertBefore(toolbarElement, headerElement);
+    headerElement.parentElement.insertBefore(this._toolbarElement, headerElement);
 
-    this._leftToolbarElement = toolbarElement.createChild("div", "toolbar-controls-left");
-    toolbarElement.appendChild(headerElement);
-    this._rightToolbarElement = toolbarElement.createChild("div", "toolbar-controls-right");
+    this._leftToolbarElement = this._toolbarElement.createChild("div", "toolbar-controls-left");
+    this._toolbarElement.appendChild(headerElement);
+    this._rightToolbarElement = this._toolbarElement.createChild("div", "toolbar-controls-right");
 
     this._errorWarningCountElement = this._rightToolbarElement.createChild("div", "hidden");
     this._errorWarningCountElement.id = "error-warning-count";
 
-    this._drawer = new WebInspector.Drawer(this);
+    this._closeButtonToolbarItem = document.createElementWithClass("div", "toolbar-close-button-item");
+    var closeButtonElement = this._closeButtonToolbarItem.createChild("div", "close-button");
+    closeButtonElement.addEventListener("click", WebInspector.close.bind(WebInspector), true);
+    this._rightToolbarElement.appendChild(this._closeButtonToolbarItem);
+
     this.appendToRightToolbar(this._drawer.toggleButtonElement());
 
     this._history = [];
@@ -68,11 +80,28 @@ WebInspector.InspectorView = function()
     this._openBracketIdentifiers = ["U+005B", "U+00DB"].keySet();
     this._closeBracketIdentifiers = ["U+005D", "U+00DD"].keySet();
     this._lastActivePanelSetting = WebInspector.settings.createSetting("lastActivePanel", "elements");
-}
+
+    this._loadPanelDesciptors();
+};
 
 WebInspector.InspectorView.prototype = {
+    _loadPanelDesciptors: function()
+    {
+        WebInspector.startBatchUpdate();
+        WebInspector.moduleManager.extensions(WebInspector.Panel).forEach(processPanelExtensions.bind(this));
+        /**
+         * @param {!WebInspector.ModuleManager.Extension} extension
+         * @this {!WebInspector.InspectorView}
+         */
+        function processPanelExtensions(extension)
+        {
+            this.addPanel(new WebInspector.ModuleManagerExtensionPanelDescriptor(extension));
+        }
+        WebInspector.endBatchUpdate();
+    },
+
     /**
-     * @param {Element} element
+     * @param {!Element} element
      */
     appendToLeftToolbar: function(element)
     {
@@ -80,23 +109,15 @@ WebInspector.InspectorView.prototype = {
     },
 
     /**
-     * @param {Element} element
+     * @param {!Element} element
      */
     appendToRightToolbar: function(element)
     {
-        this._rightToolbarElement.appendChild(element);
+        this._rightToolbarElement.insertBefore(element, this._closeButtonToolbarItem);
     },
 
     /**
-     * @return {WebInspector.Drawer}
-     */
-    drawer: function()
-    {
-        return this._drawer;
-    },
-
-    /**
-     * @param {WebInspector.PanelDescriptor} panelDescriptor
+     * @param {!WebInspector.PanelDescriptor} panelDescriptor
      */
     addPanel: function(panelDescriptor)
     {
@@ -133,7 +154,7 @@ WebInspector.InspectorView.prototype = {
     },
 
     /**
-     * @return {WebInspector.Panel}
+     * @return {!WebInspector.Panel}
      */
     currentPanel: function()
     {
@@ -144,6 +165,33 @@ WebInspector.InspectorView.prototype = {
     {
         this._tabbedPane.addEventListener(WebInspector.TabbedPane.EventTypes.TabSelected, this._tabSelected, this);
         this._tabSelected();
+        this._drawer.initialPanelShown();
+    },
+
+    showDrawerEditor: function()
+    {
+        this._drawer.showDrawerEditor();
+    },
+
+    /**
+     * @return {boolean}
+     */
+    isDrawerEditorShown: function()
+    {
+        return this._drawer.isDrawerEditorShown();
+    },
+
+    hideDrawerEditor: function()
+    {
+        this._drawer.hideDrawerEditor();
+    },
+
+    /**
+     * @param {boolean} available
+     */
+    setDrawerEditorAvailable: function(available)
+    {
+        this._drawer.setDrawerEditorAvailable(available);
     },
 
     _tabSelected: function()
@@ -160,7 +208,7 @@ WebInspector.InspectorView.prototype = {
     },
 
     /**
-     * @param {WebInspector.Panel} x
+     * @param {!WebInspector.Panel} x
      */
     setCurrentPanel: function(x)
     {
@@ -176,43 +224,39 @@ WebInspector.InspectorView.prototype = {
      */
     closeViewInDrawer: function(id)
     {
-        return this._drawer.closeView(id);
+        this._drawer.closeView(id);
     },
 
     /**
      * @param {string} id
      * @param {string} title
-     * @param {WebInspector.View} view
+     * @param {!WebInspector.View} view
      */
     showCloseableViewInDrawer: function(id, title, view)
     {
         this._drawer.showCloseableView(id, title, view);
     },
 
-    /**
-     * @param {string} id
-     * @param {string} title
-     * @param {WebInspector.ViewFactory} factory
-     */
-    registerViewInDrawer: function(id, title, factory)
+    showDrawer: function()
     {
-        this._drawer.registerView(id, title, factory);
+        this._drawer.showDrawer();
+    },
+
+    /**
+     * @return {boolean}
+     */
+    drawerVisible: function()
+    {
+        return this._drawer.isShowing();
     },
 
     /**
      * @param {string} id
+     * @param {boolean=} immediate
      */
-    unregisterViewInDrawer: function(id)
+    showViewInDrawer: function(id, immediate)
     {
-        this._drawer.unregisterView(id);
-    },
-
-    /**
-     * @param {string} id
-     */
-    showViewInDrawer: function(id)
-    {
-        this._drawer.showView(id);
+        this._drawer.showView(id, immediate);
     },
 
     /**
@@ -225,11 +269,11 @@ WebInspector.InspectorView.prototype = {
 
     closeDrawer: function()
     {
-        this._drawer.hide();
+        this._drawer.closeDrawer();
     },
 
     /**
-     * @return {Element}
+     * @return {!Element}
      */
     defaultFocusedElement: function()
     {
@@ -251,15 +295,23 @@ WebInspector.InspectorView.prototype = {
         if (!WebInspector.KeyboardShortcut.eventHasCtrlOrMeta(event))
             return;
 
+        var keyboardEvent = /** @type {!KeyboardEvent} */ (event);
         // Ctrl/Cmd + 1-9 should show corresponding panel.
         var panelShortcutEnabled = WebInspector.settings.shortcutPanelSwitch.get();
-        if (panelShortcutEnabled && !event.shiftKey && !event.altKey && event.keyCode > 0x30 && event.keyCode < 0x3A) {
-            var panelName = this._tabbedPane.allTabs()[event.keyCode - 0x31];
-            if (panelName) {
-                this.showPanel(panelName);
-                event.consume(true);
+        if (panelShortcutEnabled && !event.shiftKey && !event.altKey) {
+            var panelIndex = -1;
+            if (event.keyCode > 0x30 && event.keyCode < 0x3A)
+                panelIndex = event.keyCode - 0x31;
+            else if (event.keyCode > 0x60 && event.keyCode < 0x6A && keyboardEvent.location === KeyboardEvent.DOM_KEY_LOCATION_NUMPAD)
+                panelIndex = event.keyCode - 0x61;
+            if (panelIndex !== -1) {
+                var panelName = this._tabbedPane.allTabs()[panelIndex];
+                if (panelName) {
+                    this.showPanel(panelName);
+                    event.consume(true);
+                }
+                return;
             }
-            return;
         }
 
         // BUG85312: On French AZERTY keyboards, AltGr-]/[ combinations (synonymous to Ctrl-Alt-]/[ on Windows) are used to enter ]/[,
@@ -275,67 +327,47 @@ WebInspector.InspectorView.prototype = {
 
     _keyDownInternal: function(event)
     {
-        if (this._openBracketIdentifiers[event.keyIdentifier]) {
-            var isRotateLeft = !event.shiftKey && !event.altKey;
-            if (isRotateLeft) {
-                var panelOrder = this._tabbedPane.allTabs();
-                var index = panelOrder.indexOf(this.currentPanel().name);
-                index = (index === 0) ? panelOrder.length - 1 : index - 1;
-                this.showPanel(panelOrder[index]);
-                event.consume(true);
-                return;
-            }
+        var direction = 0;
 
-            var isGoBack = event.altKey;
-            if (isGoBack && this._canGoBackInHistory()) {
-                this._goBackInHistory();
-                event.consume(true);
-            }
+        if (this._openBracketIdentifiers[event.keyIdentifier])
+            direction = -1;
+
+        if (this._closeBracketIdentifiers[event.keyIdentifier])
+            direction = 1;
+
+        if (!direction)
+            return;
+
+        if (!event.shiftKey && !event.altKey) {
+            this._changePanelInDirection(direction);
+            event.consume(true);
             return;
         }
 
-        if (this._closeBracketIdentifiers[event.keyIdentifier]) {
-            var isRotateRight = !event.shiftKey && !event.altKey;
-            if (isRotateRight) {
-                var panelOrder = this._tabbedPane.allTabs();
-                var index = panelOrder.indexOf(this.currentPanel().name);
-                index = (index + 1) % panelOrder.length;
-                this.showPanel(panelOrder[index]);
-                event.consume(true);
-                return;
-            }
-
-            var isGoForward = event.altKey;
-            if (isGoForward && this._canGoForwardInHistory()) {
-                this._goForwardInHistory();
-                event.consume(true);
-            }
-            return;
-        }
+        if (event.altKey && this._moveInHistory(direction))
+            event.consume(true)
     },
 
-    _canGoBackInHistory: function()
+    _changePanelInDirection: function(direction)
     {
-        return this._historyIterator > 0;
+        var panelOrder = this._tabbedPane.allTabs();
+        var index = panelOrder.indexOf(this.currentPanel().name);
+        index = (index + panelOrder.length + direction) % panelOrder.length;
+        this.showPanel(panelOrder[index]);
     },
 
-    _goBackInHistory: function()
+    _moveInHistory: function(move)
     {
+        var newIndex = this._historyIterator + move;
+        if (newIndex >= this._history.length || newIndex < 0)
+            return false;
+
         this._inHistory = true;
-        this.setCurrentPanel(WebInspector.panels[this._history[--this._historyIterator]]);
+        this._historyIterator = newIndex;
+        this.setCurrentPanel(WebInspector.panels[this._history[this._historyIterator]]);
         delete this._inHistory;
-    },
 
-    _canGoForwardInHistory: function()
-    {
-        return this._historyIterator < this._history.length - 1;
-    },
-
-    _goForwardInHistory: function()
-    {
-        this._inHistory = true;
-        this.setCurrentPanel(WebInspector.panels[this._history[++this._historyIterator]]);
-        delete this._inHistory;
+        return true;
     },
 
     _pushToHistory: function(panelName)
@@ -351,15 +383,68 @@ WebInspector.InspectorView.prototype = {
 
     onResize: function()
     {
-        // FIXME: make drawer a view.
-        this.doResize();
-        this._drawer.resize();
+        WebInspector.Dialog.modalHostRepositioned();
+    },
+
+    /**
+     * @return {!Element}
+     */
+    topResizerElement: function()
+    {
+        return this._tabbedPane.headerElement();
+    },
+
+    _createImagedCounterElementIfNeeded: function(count, id, styleName)
+    {
+        if (!count)
+            return;
+
+        var imageElement = this._errorWarningCountElement.createChild("div", styleName);
+        var counterElement = this._errorWarningCountElement.createChild("span");
+        counterElement.id = id;
+        counterElement.textContent = count;
+    },
+
+    /**
+     * @param {number} errors
+     * @param {number} warnings
+     */
+    setErrorAndWarningCounts: function(errors, warnings)
+    {
+        this._errorWarningCountElement.classList.toggle("hidden", !errors && !warnings);
+        this._errorWarningCountElement.removeChildren();
+
+        this._createImagedCounterElementIfNeeded(errors, "error-count", "error-icon-small");
+        this._createImagedCounterElementIfNeeded(warnings, "warning-count", "warning-icon-small");
+
+        var errorString = errors ?  WebInspector.UIString("%d error%s", errors, errors > 1 ? "s" : "") : "";
+        var warningString = warnings ?  WebInspector.UIString("%d warning%s", warnings, warnings > 1 ? "s" : "") : "";
+        var commaString = errors && warnings ? ", " : "";
+        this._errorWarningCountElement.title = errorString + commaString + warningString;
+        this._tabbedPane.headerResized();
     },
 
     __proto__: WebInspector.View.prototype
-}
+};
 
 /**
- * @type {WebInspector.InspectorView}
+ * @type {!WebInspector.InspectorView}
  */
-WebInspector.inspectorView = null;
+WebInspector.inspectorView;
+
+/**
+ * @constructor
+ * @extends {WebInspector.View}
+ */
+WebInspector.RootView = function()
+{
+    WebInspector.View.call(this);
+    this.markAsRoot();
+    this.element.classList.add("fill", "root-view");
+    this.element.setAttribute("spellcheck", false);
+    window.addEventListener("resize", this.doResize.bind(this), true);
+};
+
+WebInspector.RootView.prototype = {
+    __proto__: WebInspector.View.prototype
+};

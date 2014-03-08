@@ -40,7 +40,7 @@ WebInspector.ContentProvider.prototype = {
     contentURL: function() { },
 
     /**
-     * @return {WebInspector.ResourceType}
+     * @return {!WebInspector.ResourceType}
      */
     contentType: function() { },
 
@@ -53,7 +53,7 @@ WebInspector.ContentProvider.prototype = {
      * @param {string} query
      * @param {boolean} caseSensitive
      * @param {boolean} isRegex
-     * @param {function(Array.<WebInspector.ContentProvider.SearchMatch>)} callback
+     * @param {function(!Array.<!WebInspector.ContentProvider.SearchMatch>)} callback
      */
     searchInContent: function(query, caseSensitive, isRegex, callback) { }
 }
@@ -73,21 +73,16 @@ WebInspector.ContentProvider.SearchMatch = function(lineNumber, lineContent) {
  * @param {string} query
  * @param {boolean} caseSensitive
  * @param {boolean} isRegex
- * @return {Array.<WebInspector.ContentProvider.SearchMatch>}
+ * @return {!Array.<!WebInspector.ContentProvider.SearchMatch>}
  */
 WebInspector.ContentProvider.performSearchInContent = function(content, query, caseSensitive, isRegex)
 {
     var regex = createSearchRegex(query, caseSensitive, isRegex);
 
+    var contentString = new String(content);
     var result = [];
-    var lineEndings = content.lineEndings();
-    for (var i = 0; i < lineEndings.length; ++i) {
-        var lineStart = i > 0 ? lineEndings[i - 1] + 1 : 0;
-        var lineEnd = lineEndings[i];
-        var lineContent = content.substring(lineStart, lineEnd);
-        if (lineContent.length > 0 && lineContent.charAt(lineContent.length - 1) === "\r")
-            lineContent = lineContent.substring(0, lineContent.length - 1)
-
+    for (var i = 0; i < contentString.lineCount(); ++i) {
+        var lineContent = contentString.lineAt(i);
         regex.lastIndex = 0;
         if (regex.exec(lineContent))
             result.push(new WebInspector.ContentProvider.SearchMatch(i, lineContent));

@@ -35,7 +35,7 @@
 WebInspector.PlatformFontsSidebarPane = function()
 {
     WebInspector.SidebarPane.call(this, WebInspector.UIString("Fonts"));
-    this.element.addStyleClass("platform-fonts");
+    this.element.classList.add("platform-fonts");
     WebInspector.domAgent.addEventListener(WebInspector.DOMAgent.Events.AttrModified, this._onNodeChange.bind(this));
     WebInspector.domAgent.addEventListener(WebInspector.DOMAgent.Events.AttrRemoved, this._onNodeChange.bind(this));
     WebInspector.domAgent.addEventListener(WebInspector.DOMAgent.Events.CharacterDataModified, this._onNodeChange.bind(this));
@@ -55,7 +55,7 @@ WebInspector.PlatformFontsSidebarPane.prototype = {
     },
 
     /**
-     * @param {WebInspector.DOMNode=} node
+     * @param {?WebInspector.DOMNode} node
      */
     update: function(node)
     {
@@ -79,8 +79,9 @@ WebInspector.PlatformFontsSidebarPane.prototype = {
     },
 
     /**
-     * @param {String} cssFamilyName
-     * @param {WebInspector.DOMNode} node
+     * @param {!WebInspector.DOMNode} node
+     * @param {?string} cssFamilyName
+     * @param {?Array.<!CSSAgent.PlatformFontUsage>} platformFonts
      */
     _refreshUI: function(node, cssFamilyName, platformFonts)
     {
@@ -90,7 +91,7 @@ WebInspector.PlatformFontsSidebarPane.prototype = {
         this._fontStatsSection.removeChildren();
 
         var isEmptySection = !platformFonts || !platformFonts.length;
-        this._sectionTitle.enableStyleClass("hidden", isEmptySection);
+        this._sectionTitle.classList.toggle("hidden", isEmptySection);
         if (isEmptySection)
             return;
         platformFonts.sort(function (a, b) {

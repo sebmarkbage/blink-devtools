@@ -31,12 +31,13 @@
 /**
  * @constructor
  * @extends {WebInspector.Object}
- * @param {!Element} element
+ * @param {string} elementType
  */
-WebInspector.StatusBarItem = function(element)
+WebInspector.StatusBarItem = function(elementType)
 {
-    this.element = element;
+    this.element = document.createElement(elementType);
     this._enabled = true;
+    this._visible = true;
 }
 
 WebInspector.StatusBarItem.prototype = {
@@ -59,6 +60,19 @@ WebInspector.StatusBarItem.prototype = {
         this.element.disabled = !this._enabled;
     },
 
+    get visible()
+    {
+        return this._visible;
+    },
+
+    set visible(x)
+    {
+        if (this._visible === x)
+            return;
+        this.element.classList.toggle("hidden", !x);
+        this._visible = x;
+    },
+
     __proto__: WebInspector.Object.prototype
 }
 
@@ -70,10 +84,10 @@ WebInspector.StatusBarItem.prototype = {
  */
 WebInspector.StatusBarText = function(text, className)
 {
-    WebInspector.StatusBarItem.call(this, document.createElement("span"));
+    WebInspector.StatusBarItem.call(this, "span");
     this.element.className = "status-bar-item status-bar-text";
     if (className)
-        this.element.addStyleClass(className);
+        this.element.classList.add(className);
     this.element.textContent = text;
 }
 
@@ -89,6 +103,48 @@ WebInspector.StatusBarText.prototype = {
     __proto__: WebInspector.StatusBarItem.prototype
 }
 
+/**
+ * @constructor
+ * @extends {WebInspector.StatusBarItem}
+ * @param {string=} placeholder
+ * @param {number=} width
+ */
+WebInspector.StatusBarInput = function(placeholder, width)
+{
+    WebInspector.StatusBarItem.call(this, "input");
+    this.element.className = "status-bar-item";
+    this.element.addEventListener("input", this._onChangeCallback.bind(this), false);
+    if (width)
+        this.element.style.width = width + "px";
+    if (placeholder)
+        this.element.setAttribute("placeholder", placeholder);
+}
+
+WebInspector.StatusBarInput.prototype = {
+    /**
+     * @param {?function(string)} handler
+     */
+    setOnChangeHandler: function(handler)
+    {
+        this._onChangeHandler = handler;
+    },
+
+    /**
+     * @param {string} value
+     */
+    setValue: function(value)
+    {
+        this.element.value = value;
+        this._onChangeCallback();
+    },
+
+    _onChangeCallback: function()
+    {
+        this._onChangeHandler && this._onChangeHandler(this.element.value);
+    },
+
+    __proto__: WebInspector.StatusBarItem.prototype
+}
 
 /**
  * @constructor
@@ -99,7 +155,7 @@ WebInspector.StatusBarText.prototype = {
  */
 WebInspector.StatusBarButton = function(title, className, states)
 {
-    WebInspector.StatusBarItem.call(this, document.createElement("button"));
+    WebInspector.StatusBarItem.call(this, "button");
     this.element.className = className + " status-bar-item";
     this.element.addEventListener("click", this._clicked.bind(this), false);
 
@@ -122,7 +178,6 @@ WebInspector.StatusBarButton = function(title, className, states)
 
     this.title = title;
     this.className = className;
-    this._visible = true;
 }
 
 WebInspector.StatusBarButton.prototype = {
@@ -179,11 +234,11 @@ WebInspector.StatusBarButton.prototype = {
             return;
 
         if (this.states === 2)
-            this.element.enableStyleClass("toggled-on", x);
+            this.element.classList.toggle("toggled-on", x);
         else {
-            this.element.removeStyleClass("toggled-" + this._state);
+            this.element.classList.remove("toggled-" + this._state);
             if (x !== 0)
-                this.element.addStyleClass("toggled-" + x);
+                this.element.classList.add("toggled-" + x);
         }
         this._state = x;
     },
@@ -202,20 +257,6 @@ WebInspector.StatusBarButton.prototype = {
         this.state = x;
     },
 
-    get visible()
-    {
-        return this._visible;
-    },
-
-    set visible(x)
-    {
-        if (this._visible === x)
-            return;
-
-        this.element.enableStyleClass("hidden", !x);
-        this._visible = x;
-    },
-
     makeLongClickEnabled: function()
     {
         var boundMouseDown = mouseDown.bind(this);
@@ -229,6 +270,10 @@ WebInspector.StatusBarButton.prototype = {
 
         this._longClickData = { mouseUp: boundMouseUp, mouseDown: boundMouseDown };
 
+        /**
+         * @param {?Event} e
+         * @this {WebInspector.StatusBarButton}
+         */
         function mouseDown(e)
         {
             if (e.which !== 1)
@@ -237,6 +282,10 @@ WebInspector.StatusBarButton.prototype = {
             this._longClickInterval = setInterval(longClicked.bind(this), 200);
         }
 
+        /**
+         * @param {?Event} e
+         * @this {WebInspector.StatusBarButton}
+         */
         function mouseUp(e)
         {
             if (e.which !== 1)
@@ -247,6 +296,9 @@ WebInspector.StatusBarButton.prototype = {
             }
         }
 
+        /**
+         * @this {WebInspector.StatusBarButton}
+         */
         function longClicked()
         {
             ++longClicks;
@@ -265,7 +317,7 @@ WebInspector.StatusBarButton.prototype = {
     },
 
     /**
-     * @param {?function():Array.<WebInspector.StatusBarButton>} buttonsProvider
+     * @param {?function():!Array.<!WebInspector.StatusBarButton>} buttonsProvider
      */
     setLongClickOptionsEnabled: function(buttonsProvider)
     {
@@ -321,7 +373,7 @@ WebInspector.StatusBarButton.prototype = {
 
         var hostButtonPosition = this.element.totalOffset();
 
-        var topNotBottom = hostButtonPosition.top < document.documentElement.offsetHeight / 2;
+        var topNotBottom = hostButtonPosition.top + buttonHeight * buttons.length < document.documentElement.offsetHeight;
 
         if (topNotBottom)
             buttons = buttons.reverse();
@@ -341,14 +393,14 @@ WebInspector.StatusBarButton.prototype = {
             optionsBarElement.appendChild(buttons[i].element);
         }
         var hostButtonIndex = topNotBottom ? 0 : buttons.length - 1;
-        buttons[hostButtonIndex].element.addStyleClass("emulate-active");
+        buttons[hostButtonIndex].element.classList.add("emulate-active");
 
         function mouseOver(e)
         {
             if (e.which !== 1)
                 return;
             var buttonElement = e.target.enclosingNodeOrSelfWithClass("status-bar-item");
-            buttonElement.addStyleClass("emulate-active");
+            buttonElement.classList.add("emulate-active");
         }
 
         function mouseOut(e)
@@ -356,7 +408,7 @@ WebInspector.StatusBarButton.prototype = {
             if (e.which !== 1)
                 return;
             var buttonElement = e.target.enclosingNodeOrSelfWithClass("status-bar-item");
-            buttonElement.removeStyleClass("emulate-active");
+            buttonElement.classList.remove("emulate-active");
         }
 
         function mouseUp(e)
@@ -367,8 +419,8 @@ WebInspector.StatusBarButton.prototype = {
             document.documentElement.removeEventListener("mouseup", mouseUpListener, false);
 
             for (var i = 0; i < buttons.length; ++i) {
-                if (buttons[i].element.hasStyleClass("emulate-active")) {
-                    buttons[i].element.removeStyleClass("emulate-active");
+                if (buttons[i].element.classList.contains("emulate-active")) {
+                    buttons[i].element.classList.remove("emulate-active");
                     buttons[i]._clicked();
                     break;
                 }
@@ -382,12 +434,12 @@ WebInspector.StatusBarButton.prototype = {
 /**
  * @constructor
  * @extends {WebInspector.StatusBarItem}
- * @param {?function(Event)} changeHandler
+ * @param {?function(!Event)} changeHandler
  * @param {string=} className
  */
 WebInspector.StatusBarComboBox = function(changeHandler, className)
 {
-    WebInspector.StatusBarItem.call(this, document.createElement("span"));
+    WebInspector.StatusBarItem.call(this, "span");
     this.element.className = "status-bar-select-container";
 
     this._selectElement = this.element.createChild("select", "status-bar-item");
@@ -395,7 +447,7 @@ WebInspector.StatusBarComboBox = function(changeHandler, className)
     if (changeHandler)
         this._selectElement.addEventListener("change", changeHandler, false);
     if (className)
-        this._selectElement.addStyleClass(className);
+        this._selectElement.classList.add(className);
 }
 
 WebInspector.StatusBarComboBox.prototype = {
@@ -472,7 +524,7 @@ WebInspector.StatusBarComboBox.prototype = {
     },
 
     /**
-     * @param {Element} option
+     * @param {!Element} option
      */
     select: function(option)
     {
@@ -496,4 +548,130 @@ WebInspector.StatusBarComboBox.prototype = {
     },
 
     __proto__: WebInspector.StatusBarItem.prototype
+}
+
+/**
+ * @constructor
+ * @extends {WebInspector.StatusBarItem}
+ * @param {string} title
+ */
+WebInspector.StatusBarCheckbox = function(title)
+{
+    WebInspector.StatusBarItem.call(this, "label");
+    this.element.classList.add("status-bar-item", "checkbox");
+    this._checkbox = this.element.createChild("input");
+    this._checkbox.type = "checkbox";
+    this.element.createTextChild(title);
+}
+
+WebInspector.StatusBarCheckbox.prototype = {
+    /**
+     * @return {boolean}
+     */
+    checked: function()
+    {
+        return this._checkbox.checked;
+    },
+
+    __proto__: WebInspector.StatusBarItem.prototype
+}
+
+/**
+ * @constructor
+ * @extends {WebInspector.StatusBarButton}
+ * @param {string} className
+ * @param {!Array.<string>} states
+ * @param {!Array.<string>} titles
+ * @param {!WebInspector.Setting} currentStateSetting
+ * @param {!WebInspector.Setting} lastStateSetting
+ * @param {?function(string)} stateChangedCallback
+ */
+WebInspector.StatusBarStatesSettingButton = function(className, states, titles, currentStateSetting, lastStateSetting, stateChangedCallback)
+{
+    WebInspector.StatusBarButton.call(this, "", className, states.length);
+
+    var onClickBound = this._onClick.bind(this);
+    this.addEventListener("click", onClickBound, this);
+
+    this._states = states;
+    this._buttons = [];
+    for (var index = 0; index < states.length; index++) {
+        var button = new WebInspector.StatusBarButton(titles[index], className, states.length);
+        button.state = this._states[index];
+        button.addEventListener("click", onClickBound, this);
+        this._buttons.push(button);
+    }
+
+    this._currentStateSetting = currentStateSetting;
+    this._lastStateSetting = lastStateSetting;
+    this._stateChangedCallback = stateChangedCallback;
+    this.setLongClickOptionsEnabled(this._createOptions.bind(this));
+
+    this._currentState = null;
+    this.toggleState(this._defaultState());
+}
+
+WebInspector.StatusBarStatesSettingButton.prototype = {
+    /**
+     * @param {!WebInspector.Event} e
+     */
+    _onClick: function(e)
+    {
+        this.toggleState(e.target.state);
+    },
+
+    /**
+     * @param {string} state
+     */
+    toggleState: function(state)
+    {
+        if (this._currentState === state)
+            return;
+
+        if (this._currentState)
+            this._lastStateSetting.set(this._currentState);
+        this._currentState = state;
+        this._currentStateSetting.set(this._currentState);
+
+        if (this._stateChangedCallback)
+            this._stateChangedCallback(state);
+
+        var defaultState = this._defaultState();
+        this.state = defaultState;
+        this.title = this._buttons[this._states.indexOf(defaultState)].title;
+    },
+
+    /**
+     * @return {string}
+     */
+    _defaultState: function()
+    {
+        // Not yet initialized - load from setting.
+        if (!this._currentState) {
+            var state = this._currentStateSetting.get();
+            return this._states.indexOf(state) >= 0 ? state : this._states[0];
+        }
+
+        var lastState = this._lastStateSetting.get();
+        if (lastState && this._states.indexOf(lastState) >= 0 && lastState != this._currentState)
+            return lastState;
+        if (this._states.length > 1 && this._currentState === this._states[0])
+            return this._states[1];
+        return this._states[0];
+    },
+
+    /**
+     * @return {!Array.<!WebInspector.StatusBarButton>}
+     */
+    _createOptions: function()
+    {
+        var options = [];
+        for (var index = 0; index < this._states.length; index++) {
+            if (this._states[index] !== this.state && this._states[index] !== this._currentState)
+                options.push(this._buttons[index]);
+        }
+        return options;
+    },
+
+    __proto__: WebInspector.StatusBarButton.prototype
 }

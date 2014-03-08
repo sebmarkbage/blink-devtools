@@ -38,7 +38,6 @@
 WebInspector.CookiesTable = function(expandable, refreshCallback, selectedCallback)
 {
     WebInspector.View.call(this);
-    this.element.className = "fill";
 
     var readOnly = expandable;
     this._refreshCallback = refreshCallback;
@@ -83,7 +82,7 @@ WebInspector.CookiesTable.prototype = {
 
     /**
      * @param {!WebInspector.ContextMenu} contextMenu
-     * @param {WebInspector.DataGridNode} node
+     * @param {!WebInspector.DataGridNode} node
      */
     _onContextMenu: function(contextMenu, node)
     {
@@ -148,7 +147,7 @@ WebInspector.CookiesTable.prototype = {
                 var groupNode = new WebInspector.DataGridNode(groupData);
                 groupNode.selectable = true;
                 this._dataGrid.rootNode().appendChild(groupNode);
-                groupNode.element.addStyleClass("row-group");
+                groupNode.element.classList.add("row-group");
                 this._populateNode(groupNode, item.cookies, selectedCookie);
                 groupNode.expand();
             } else

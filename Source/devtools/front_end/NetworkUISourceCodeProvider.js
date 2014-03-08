@@ -30,8 +30,8 @@
 
 /**
  * @constructor
- * @param {WebInspector.SimpleWorkspaceProvider} networkWorkspaceProvider
- * @param {WebInspector.Workspace} workspace
+ * @param {!WebInspector.SimpleWorkspaceProvider} networkWorkspaceProvider
+ * @param {!WebInspector.Workspace} workspace
  */
 WebInspector.NetworkUISourceCodeProvider = function(networkWorkspaceProvider, workspace)
 {
@@ -48,6 +48,10 @@ WebInspector.NetworkUISourceCodeProvider = function(networkWorkspaceProvider, wo
 WebInspector.NetworkUISourceCodeProvider.prototype = {
     _populate: function()
     {
+        /**
+         * @param {!WebInspector.ResourceTreeFrame} frame
+         * @this {WebInspector.NetworkUISourceCodeProvider}
+         */
         function populateFrame(frame)
         {
             for (var i = 0; i < frame.childFrames.length; ++i)
@@ -62,11 +66,11 @@ WebInspector.NetworkUISourceCodeProvider.prototype = {
     },
 
     /**
-     * @param {WebInspector.Event} event
+     * @param {!WebInspector.Event} event
      */
     _parsedScriptSource: function(event)
     {
-        var script = /** @type {WebInspector.Script} */ (event.data);
+        var script = /** @type {!WebInspector.Script} */ (event.data);
         if (!script.sourceURL || script.isInlineScript() || script.isSnippet())
             return;
         // Filter out embedder injected content scripts.
@@ -79,11 +83,11 @@ WebInspector.NetworkUISourceCodeProvider.prototype = {
     },
 
     /**
-     * @param {WebInspector.Event} event
+     * @param {!WebInspector.Event} event
      */
     _styleSheetAdded: function(event)
     {
-        var header = /** @type {WebInspector.CSSStyleSheetHeader} */ (event.data);
+        var header = /** @type {!WebInspector.CSSStyleSheetHeader} */ (event.data);
         if ((!header.hasSourceURL || header.isInline) && header.origin !== "inspector")
             return;
 
@@ -91,16 +95,16 @@ WebInspector.NetworkUISourceCodeProvider.prototype = {
     },
 
     /**
-     * @param {WebInspector.Event} event
+     * @param {!WebInspector.Event|!{data: !WebInspector.Resource}} event
      */
     _resourceAdded: function(event)
     {
-        var resource = /** @type {WebInspector.Resource} */ (event.data);
-        this._addFile(resource.url, resource);
+        var resource = /** @type {!WebInspector.Resource} */ (event.data);
+        this._addFile(resource.url, new WebInspector.NetworkUISourceCodeProvider.FallbackResource(resource));
     },
 
     /**
-     * @param {WebInspector.Event} event
+     * @param {!WebInspector.Event} event
      */
     _mainFrameNavigated: function(event)
     {
@@ -109,7 +113,7 @@ WebInspector.NetworkUISourceCodeProvider.prototype = {
 
     /**
      * @param {string} url
-     * @param {WebInspector.ContentProvider} contentProvider
+     * @param {!WebInspector.ContentProvider} contentProvider
      * @param {boolean=} isContentScript
      */
     _addFile: function(url, contentProvider, isContentScript)
@@ -136,6 +140,107 @@ WebInspector.NetworkUISourceCodeProvider.prototype = {
 }
 
 /**
- * @type {?WebInspector.SimpleWorkspaceProvider}
+ * @constructor
+ * @implements {WebInspector.ContentProvider}
+ * @param {!WebInspector.Resource} resource
  */
-WebInspector.networkWorkspaceProvider = null;
+WebInspector.NetworkUISourceCodeProvider.FallbackResource = function(resource)
+{
+    this._resource = resource;
+}
+
+WebInspector.NetworkUISourceCodeProvider.FallbackResource.prototype = {
+
+    /**
+     * @return {string}
+     */
+    contentURL: function()
+    {
+        return this._resource.contentURL();
+    },
+
+    /**
+     * @return {!WebInspector.ResourceType}
+     */
+    contentType: function()
+    {
+        return this._resource.contentType();
+    },
+
+    /**
+     * @param {function(?string)} callback
+     */
+    requestContent: function(callback)
+    {
+        /**
+         * @this {WebInspector.NetworkUISourceCodeProvider.FallbackResource}
+         */
+        function loadFallbackContent()
+        {
+            var scripts = WebInspector.debuggerModel.scriptsForSourceURL(this._resource.url);
+            if (!scripts.length) {
+                callback(null);
+                return;
+            }
+
+            var contentProvider;
+            if (this._resource.type === WebInspector.resourceTypes.Document)
+                contentProvider = new WebInspector.ConcatenatedScriptsContentProvider(scripts);
+            else if (this._resource.type === WebInspector.resourceTypes.Script)
+                contentProvider = scripts[0];
+
+            console.assert(contentProvider, "Resource content request failed. " + this._resource.url);
+
+            contentProvider.requestContent(callback);
+        }
+
+        /**
+         * @param {?string} content
+         * @this {WebInspector.NetworkUISourceCodeProvider.FallbackResource}
+         */
+        function requestContentLoaded(content)
+        {
+            if (content)
+                callback(content)
+            else
+                loadFallbackContent.call(this);
+        }
+
+        this._resource.requestContent(requestContentLoaded.bind(this));
+    },
+
+    /**
+     * @param {string} query
+     * @param {boolean} caseSensitive
+     * @param {boolean} isRegex
+     * @param {function(!Array.<!WebInspector.ContentProvider.SearchMatch>)} callback
+     */
+    searchInContent: function(query, caseSensitive, isRegex, callback)
+    {
+        /**
+         * @param {?string} content
+         */
+        function documentContentLoaded(content)
+        {
+            if (content === null) {
+                callback([]);
+                return;
+            }
+
+            var result = WebInspector.ContentProvider.performSearchInContent(content, query, caseSensitive, isRegex);
+            callback(result);
+        }
+
+        if (this.contentType() === WebInspector.resourceTypes.Document) {
+            this.requestContent(documentContentLoaded);
+            return;
+        }
+
+        this._resource.searchInContent(query, caseSensitive, isRegex, callback);
+    }
+}
+
+/**
+ * @type {!WebInspector.SimpleWorkspaceProvider}
+ */
+WebInspector.networkWorkspaceProvider;

@@ -30,19 +30,9 @@
 
 /**
  * @constructor
- */
-WebInspector.Worker = function(id, url, shared)
-{
-    this.id = id;
-    this.url = url;
-    this.shared = shared;
-}
-
-/**
- * @constructor
  * @extends {WebInspector.SidebarPane}
  */
-WebInspector.WorkersSidebarPane = function(workerManager)
+WebInspector.WorkersSidebarPane = function()
 {
     WebInspector.SidebarPane.call(this, WebInspector.UIString("Workers"));
 
@@ -57,7 +47,7 @@ WebInspector.WorkersSidebarPane = function(workerManager)
 
     var note = this.bodyElement.createChild("div");
     note.id = "shared-workers-list";
-    note.addStyleClass("sidebar-label")
+    note.classList.add("sidebar-label")
     note.textContent = WebInspector.UIString("Shared workers can be inspected in the Task Manager");
 
     var separator = this.bodyElement.createChild("div", "sidebar-separator");
@@ -65,22 +55,30 @@ WebInspector.WorkersSidebarPane = function(workerManager)
 
     this._workerListElement = document.createElement("ol");
     this._workerListElement.tabIndex = 0;
-    this._workerListElement.addStyleClass("properties-tree");
-    this._workerListElement.addStyleClass("sidebar-label");
+    this._workerListElement.classList.add("properties-tree");
+    this._workerListElement.classList.add("sidebar-label");
     this.bodyElement.appendChild(this._workerListElement);
 
     this._idToWorkerItem = {};
-    this._workerManager = workerManager;
 
-    workerManager.addEventListener(WebInspector.WorkerManager.Events.WorkerAdded, this._workerAdded, this);
-    workerManager.addEventListener(WebInspector.WorkerManager.Events.WorkerRemoved, this._workerRemoved, this);
-    workerManager.addEventListener(WebInspector.WorkerManager.Events.WorkersCleared, this._workersCleared, this);
+    var threadList = WebInspector.workerManager.threadsList();
+    for (var i = 0; i < threadList.length; ++i) {
+        var threadId = threadList[i];
+        if (threadId === WebInspector.WorkerManager.MainThreadId)
+            continue;
+
+        this._addWorker(threadId, WebInspector.workerManager.threadUrl(threadId));
+    }
+
+    WebInspector.workerManager.addEventListener(WebInspector.WorkerManager.Events.WorkerAdded, this._workerAdded, this);
+    WebInspector.workerManager.addEventListener(WebInspector.WorkerManager.Events.WorkerRemoved, this._workerRemoved, this);
+    WebInspector.workerManager.addEventListener(WebInspector.WorkerManager.Events.WorkersCleared, this._workersCleared, this);
 }
 
 WebInspector.WorkersSidebarPane.prototype = {
     _workerAdded: function(event)
     {
-        this._addWorker(event.data.workerId, event.data.url, event.data.inspectorConnected);
+        this._addWorker(event.data.workerId, event.data.url);
     },
 
     _workerRemoved: function(event)
@@ -95,7 +93,7 @@ WebInspector.WorkersSidebarPane.prototype = {
         this._workerListElement.removeChildren();
     },
 
-    _addWorker: function(workerId, url, inspectorConnected)
+    _addWorker: function(workerId, url)
     {
         var item = this._workerListElement.createChild("div", "dedicated-worker-item");
         var link = item.createChild("a");
@@ -109,7 +107,7 @@ WebInspector.WorkersSidebarPane.prototype = {
     _workerItemClicked: function(workerId, event)
     {
         event.preventDefault();
-        this._workerManager.openWorkerInspector(workerId);
+        WebInspector.workerFrontendManager.openWorkerInspector(workerId);
     },
 
     _autoattachToWorkersClicked: function(event)

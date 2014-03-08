@@ -28,13 +28,6 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-// WebKit Web Facing API
-var console = { }
-/** @param {...*} vararg */
-console.log = function(vararg) { }
-/** @param {...*} vararg */
-console.table = function(vararg) { }
-
 /**
  * @constructor
  */
@@ -163,8 +156,6 @@ function JavaScriptFunction()
     /** @type {Array} */
     this.rawScopes;
 }
-
-var InspectorBackend = { };
 
 // http://code.google.com/p/v8/wiki/JavaScriptStackTraceApi
 /**

@@ -32,15 +32,7 @@ body.platform-windows {
   font-family: 'Segoe UI', Tahoma, sans-serif;
 }
 
-body.dock-to-right:not(.undocked) {
-    border-left: 1px solid rgb(80, 80, 80);
-}
-
-body.dock-to-right.inactive:not(.undocked) {
-    border-left: 1px solid rgb(64%, 64%, 64%);
-}
-
-* {
+*, *::before, *::after {
     box-sizing: border-box;
 }
 
@@ -106,10 +98,6 @@ iframe.view {
     z-index: 200;
     pointer-events: none;
     overflow: hidden;
-}
-
-.resize-enabled .resources-dividers-label-bar {
-    cursor: move;
 }
 
 .resources-divider {
@@ -180,7 +168,7 @@ iframe.view {
     opacity: 0.2;
     border-right: 1px solid black;
     border-left: 1px solid black;
-    z-index: 150;
+    z-index: 250;
     pointer-events: none;
 }
 
@@ -197,10 +185,6 @@ iframe.view {
     box-shadow: white 1px 0 0, white -1px 0 0, white 0 1px 0, white 0 -1px 0;
 }
 
-.resize-enabled .overview-grid-window-resizer {
-    cursor: ew-resize;
-}
-
 .overview-grid-window-resizer-right {
     margin-left: -3px;
     margin-right: -2px;
@@ -210,6 +194,12 @@ iframe.view {
 
 .network-timing-table td {
     padding: 0;
+}
+
+.network-timing-table td.caution {
+    font-weight: bold;
+    color: rgb(255, 128, 0);
+    padding: 2px 0;
 }
 
 .network-timing-row {
@@ -255,3 +245,41 @@ iframe.view {
     font-size: 11px;
 }
 
+.pie-chart {
+    width: 100px;
+    height: 110px;
+}
+
+.pie-chart-background {
+    position: absolute;
+    width: 100px;
+    height: 100px;
+    border-radius: 50px;
+    background-color: rgb(248, 248, 248);
+    box-shadow: 0 1px 2px;
+}
+
+.pie-chart-foreground {
+    position: absolute;
+    width: 100px;
+    height: 100px;
+    text-align: center;
+    line-height: 100px;
+    z-index: 10;
+}
+
+.pie-chart-slice {
+    position: absolute;
+    width: 100px;
+    height: 100px;
+    border-radius: 50px;
+    clip: rect(0px, 100px, 100px, 50px);
+}
+
+.pie-chart-slice-inner {
+    position: absolute;
+    width: 100px;
+    height: 100px;
+    border-radius: 50px;
+    clip: rect(0px, 50px, 100px, 0px);
+}

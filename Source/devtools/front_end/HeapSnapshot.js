@@ -30,6 +30,9 @@
 
 /**
  * @constructor
+ * @param {!Uint32Array} array
+ * @param {number} start
+ * @param {number} end
  */
 WebInspector.HeapSnapshotArraySlice = function(array, start, end)
 {
@@ -39,11 +42,20 @@ WebInspector.HeapSnapshotArraySlice = function(array, start, end)
 }
 
 WebInspector.HeapSnapshotArraySlice.prototype = {
+    /**
+     * @param {number} index
+     * @return {number}
+     */
     item: function(index)
     {
         return this._array[this._start + index];
     },
 
+    /**
+     * @param {number} start
+     * @param {number=} end
+     * @return {!Uint32Array}
+     */
     slice: function(start, end)
     {
         if (typeof end === "undefined")
@@ -63,57 +75,94 @@ WebInspector.HeapSnapshotEdge = function(snapshot, edges, edgeIndex)
     this.edgeIndex = edgeIndex || 0;
 }
 
+/**
+ * @constructor
+ * @param {string} name
+ * @param {!WebInspector.HeapSnapshotNode.Serialized} node
+ * @param {number} nodeIndex
+ * @param {string} type
+ * @param {number} distance
+ */
+WebInspector.HeapSnapshotEdge.Serialized = function(name, node, nodeIndex, type, distance) {
+    this.name = name;
+    this.node = node;
+    this.nodeIndex = nodeIndex;
+    this.type = type;
+    this.distance = distance;
+};
+
 WebInspector.HeapSnapshotEdge.prototype = {
+    /**
+     * @return {!WebInspector.HeapSnapshotEdge}
+     */
     clone: function()
     {
         return new WebInspector.HeapSnapshotEdge(this._snapshot, this._edges, this.edgeIndex);
     },
 
+    /**
+     * @return {boolean}
+     */
     hasStringName: function()
     {
         throw new Error("Not implemented");
     },
 
+    /**
+     * @return {string}
+     */
     name: function()
     {
         throw new Error("Not implemented");
     },
 
+    /**
+     * @return {!WebInspector.HeapSnapshotNode}
+     */
     node: function()
     {
         return this._snapshot.createNode(this.nodeIndex());
     },
 
+    /**
+     * @return {number}
+     */
     nodeIndex: function()
     {
         return this._edges.item(this.edgeIndex + this._snapshot._edgeToNodeOffset);
     },
 
+    /**
+     * @return {!Array.<number>}
+     */
     rawEdges: function()
     {
         return this._edges;
     },
 
+    /**
+     * @return {string}
+     */
     toString: function()
     {
         return "HeapSnapshotEdge: " + this.name();
     },
 
+    /**
+     * @return {string}
+     */
     type: function()
     {
         return this._snapshot._edgeTypes[this._type()];
     },
 
+    /**
+     * @return {!WebInspector.HeapSnapshotEdge.Serialized}
+     */
     serialize: function()
     {
         var node = this.node();
-        return {
-            name: this.name(),
-            node: node.serialize(),
-            nodeIndex: this.nodeIndex(),
-            type: this.type(),
-            distance: node.distance()
-        };
+        return new WebInspector.HeapSnapshotEdge.Serialized(this.name(), node.serialize(), this.nodeIndex(), this.type(), node.distance());
     },
 
     _type: function()
@@ -136,21 +185,33 @@ WebInspector.HeapSnapshotEdgeIterator.prototype = {
         this.edge.edgeIndex = 0;
     },
 
+    /**
+     * @return {boolean}
+     */
     hasNext: function()
     {
         return this.edge.edgeIndex < this.edge._edges.length;
     },
 
+    /**
+     * @return {number}
+     */
     index: function()
     {
         return this.edge.edgeIndex;
     },
 
+    /**
+     * @param {number} newIndex
+     */
     setIndex: function(newIndex)
     {
         this.edge.edgeIndex = newIndex;
     },
 
+    /**
+     * @return {!WebInspector.HeapSnapshotEdge}
+     */
     item: function()
     {
         return this.edge;
@@ -177,37 +238,74 @@ WebInspector.HeapSnapshotRetainerEdge = function(snapshot, retainedNodeIndex, re
     this.setRetainerIndex(retainerIndex);
 }
 
+/**
+ * @constructor
+ * @param {string} name
+ * @param {!WebInspector.HeapSnapshotNode.Serialized} node
+ * @param {number} nodeIndex
+ * @param {string} type
+ * @param {number} distance
+ */
+WebInspector.HeapSnapshotRetainerEdge.Serialized = function(name, node, nodeIndex, type, distance) {
+    this.name = name;
+    this.node = node;
+    this.nodeIndex = nodeIndex;
+    this.type = type;
+    this.distance = distance;
+}
+
 WebInspector.HeapSnapshotRetainerEdge.prototype = {
+    /**
+     * @return {!WebInspector.HeapSnapshotRetainerEdge}
+     */
     clone: function()
     {
         return new WebInspector.HeapSnapshotRetainerEdge(this._snapshot, this._retainedNodeIndex, this.retainerIndex());
     },
 
+    /**
+     * @return {boolean}
+     */
     hasStringName: function()
     {
         return this._edge().hasStringName();
     },
 
+    /**
+     * @return {string}
+     */
     name: function()
     {
         return this._edge().name();
     },
 
+    /**
+     * @return {!WebInspector.HeapSnapshotNode}
+     */
     node: function()
     {
         return this._node();
     },
 
+    /**
+     * @return {number}
+     */
     nodeIndex: function()
     {
         return this._nodeIndex;
     },
 
+    /**
+     * @return {number}
+     */
     retainerIndex: function()
     {
         return this._retainerIndex;
     },
 
+    /**
+     * @param {number} newIndex
+     */
     setRetainerIndex: function(newIndex)
     {
         if (newIndex !== this._retainerIndex) {
@@ -216,6 +314,9 @@ WebInspector.HeapSnapshotRetainerEdge.prototype = {
         }
     },
 
+    /**
+     * @param {number} edgeIndex
+     */
     set edgeIndex(edgeIndex)
     {
         var retainerIndex = this._firstRetainer + edgeIndex;
@@ -241,23 +342,26 @@ WebInspector.HeapSnapshotRetainerEdge.prototype = {
         return this._edgeInstance;
     },
 
+    /**
+     * @return {string}
+     */
     toString: function()
     {
         return this._edge().toString();
     },
 
+    /**
+     * @return {!WebInspector.HeapSnapshotRetainerEdge.Serialized}
+     */
     serialize: function()
     {
         var node = this.node();
-        return {
-            name: this.name(),
-            node: node.serialize(),
-            nodeIndex: this.nodeIndex(),
-            type: this.type(),
-            distance: node.distance()
-        };
+        return new WebInspector.HeapSnapshotRetainerEdge.Serialized(this.name(), node.serialize(), this.nodeIndex(), this.type(), node.distance());
     },
 
+    /**
+     * @return {string}
+     */
     type: function()
     {
         return this._edge().type();
@@ -278,21 +382,33 @@ WebInspector.HeapSnapshotRetainerEdgeIterator.prototype = {
         this.retainer.setRetainerIndex(0);
     },
 
+    /**
+     * @return {boolean}
+     */
     hasNext: function()
     {
         return this.retainer.retainerIndex() < this.retainer._retainersCount;
     },
 
+    /**
+     * @return {number}
+     */
     index: function()
     {
         return this.retainer.retainerIndex();
     },
 
+    /**
+     * @param {number} newIndex
+     */
     setIndex: function(newIndex)
     {
         this.retainer.setRetainerIndex(newIndex);
     },
 
+    /**
+     * @return {!WebInspector.HeapSnapshotRetainerEdge}
+     */
     item: function()
     {
         return this.retainer;
@@ -315,33 +431,71 @@ WebInspector.HeapSnapshotNode = function(snapshot, nodeIndex)
     this.nodeIndex = nodeIndex;
 }
 
+/**
+ * @constructor
+ * @param {string} id
+ * @param {string} name
+ * @param {number} distance
+ * @param {number|undefined} nodeIndex
+ * @param {number} retainedSize
+ * @param {number} selfSize
+ * @param {string} type
+ */
+WebInspector.HeapSnapshotNode.Serialized = function(id, name, distance, nodeIndex, retainedSize, selfSize, type) {
+    this.id = id;
+    this.name = name;
+    this.distance = distance;
+    this.nodeIndex = nodeIndex;
+    this.retainedSize = retainedSize;
+    this.selfSize = selfSize;
+    this.type = type;
+}
+
 WebInspector.HeapSnapshotNode.prototype = {
+    /**
+     * @return {number}
+     */
     distance: function()
     {
         return this._snapshot._nodeDistances[this.nodeIndex / this._snapshot._nodeFieldCount];
     },
 
+    /**
+     * @return {string}
+     */
     className: function()
     {
         throw new Error("Not implemented");
     },
 
+    /**
+     * @return {number}
+     */
     classIndex: function()
     {
         throw new Error("Not implemented");
     },
 
+    /**
+     * @return {number}
+     */
     dominatorIndex: function()
     {
         var nodeFieldCount = this._snapshot._nodeFieldCount;
         return this._snapshot._dominatorsTree[this.nodeIndex / this._snapshot._nodeFieldCount] * nodeFieldCount;
     },
 
+    /**
+     * @return {!WebInspector.HeapSnapshotEdgeIterator}
+     */
     edges: function()
     {
         return new WebInspector.HeapSnapshotEdgeIterator(this._snapshot.createEdge(this.rawEdges(), 0));
     },
 
+    /**
+     * @return {number}
+     */
     edgesCount: function()
     {
         return (this._edgeIndexesEnd() - this._edgeIndexesStart()) / this._snapshot._edgeFieldsCount;
@@ -352,54 +506,69 @@ WebInspector.HeapSnapshotNode.prototype = {
         throw new Error("Not implemented");
     },
 
+    /**
+     * @return {boolean}
+     */
     isRoot: function()
     {
         return this.nodeIndex === this._snapshot._rootNodeIndex;
     },
 
+    /**
+     * @return {string}
+     */
     name: function()
     {
         return this._snapshot._strings[this._name()];
     },
 
+    /**
+     * @return {!WebInspector.HeapSnapshotArraySlice}
+     */
     rawEdges: function()
     {
         return new WebInspector.HeapSnapshotArraySlice(this._snapshot._containmentEdges, this._edgeIndexesStart(), this._edgeIndexesEnd());
     },
 
+    /**
+     * @return {number}
+     */
     retainedSize: function()
     {
-        var snapshot = this._snapshot;
-        return snapshot._nodes[this.nodeIndex + snapshot._nodeRetainedSizeOffset];
+        return this._snapshot._retainedSizes[this._ordinal()];
     },
 
+    /**
+     * @return {!WebInspector.HeapSnapshotRetainerEdgeIterator}
+     */
     retainers: function()
     {
         return new WebInspector.HeapSnapshotRetainerEdgeIterator(this._snapshot.createRetainingEdge(this.nodeIndex, 0));
     },
 
+    /**
+     * @return {number}
+     */
     selfSize: function()
     {
         var snapshot = this._snapshot;
         return snapshot._nodes[this.nodeIndex + snapshot._nodeSelfSizeOffset];
     },
 
+    /**
+     * @return {string}
+     */
     type: function()
     {
         return this._snapshot._nodeTypes[this._type()];
     },
 
+    /**
+     * @return {!WebInspector.HeapSnapshotNode.Serialized}
+     */
     serialize: function()
     {
-        return {
-            id: this.id(),
-            name: this.name(),
-            distance: this.distance(),
-            nodeIndex: this.nodeIndex,
-            retainedSize: this.retainedSize(),
-            selfSize: this.selfSize(),
-            type: this.type(),
-        };
+        return new WebInspector.HeapSnapshotNode.Serialized(this.id(), this.name(), this.distance(), this.nodeIndex, this.retainedSize(), this.selfSize(), this.type());
     },
 
     _name: function()
@@ -450,21 +619,33 @@ WebInspector.HeapSnapshotNodeIterator.prototype = {
         this.node.nodeIndex = this.node._firstNodeIndex;
     },
 
+    /**
+     * @return {boolean}
+     */
     hasNext: function()
     {
         return this.node.nodeIndex < this._nodesLength;
     },
 
+    /**
+     * @return {number}
+     */
     index: function()
     {
         return this.node.nodeIndex;
     },
 
+    /**
+     * @param {number} newIndex
+     */
     setIndex: function(newIndex)
     {
         this.node.nodeIndex = newIndex;
     },
 
+    /**
+     * @return {!WebInspector.HeapSnapshotNode}
+     */
     item: function()
     {
         return this.node;
@@ -478,7 +659,7 @@ WebInspector.HeapSnapshotNodeIterator.prototype = {
 
 
 /**
- * @param{WebInspector.HeapSnapshotWorkerDispatcher=} dispatcher
+ * @param {!WebInspector.HeapSnapshotWorkerDispatcher=} dispatcher
  * @constructor
  */
 WebInspector.HeapSnapshotProgress = function(dispatcher)
@@ -486,13 +667,9 @@ WebInspector.HeapSnapshotProgress = function(dispatcher)
     this._dispatcher = dispatcher;
 }
 
-WebInspector.HeapSnapshotProgress.Event = {
-    Update: "ProgressUpdate"
-};
-
 WebInspector.HeapSnapshotProgress.prototype = {
     /**
-     * @param{string} status
+     * @param {string} status
      */
     updateStatus: function(status)
     {
@@ -500,9 +677,9 @@ WebInspector.HeapSnapshotProgress.prototype = {
     },
 
     /**
-     * @param{string} title
-     * @param{number} value
-     * @param{number} total
+     * @param {string} title
+     * @param {number} value
+     * @param {number} total
      */
     updateProgress: function(title, value, total)
     {
@@ -511,27 +688,26 @@ WebInspector.HeapSnapshotProgress.prototype = {
     },
 
     /**
-     * @param{string} text
+     * @param {string} text
      */
     _sendUpdateEvent: function(text)
     {
         // May be undefined in tests.
         if (this._dispatcher)
-            this._dispatcher.sendEvent(WebInspector.HeapSnapshotProgress.Event.Update, text);
+            this._dispatcher.sendEvent(WebInspector.HeapSnapshotProgressEvent.Update, text);
     }
 }
 
 
 /**
- * @param{WebInspector.HeapSnapshotProgress} progress
+ * @param {!WebInspector.HeapSnapshotProgress} progress
  * @constructor
  */
 WebInspector.HeapSnapshot = function(profile, progress)
 {
-    this.uid = profile.snapshot.uid;
     this._nodes = profile.nodes;
     this._containmentEdges = profile.edges;
-    /** @type{HeapSnapshotMetainfo} */
+    /** @type {!HeapSnapshotMetainfo} */
     this._metaNode = profile.snapshot.meta;
     this._strings = profile.strings;
     this._progress = progress;
@@ -546,14 +722,12 @@ WebInspector.HeapSnapshot = function(profile, progress)
 
     this._init();
 
-    if (WebInspector.HeapSnapshot.enableAllocationProfiler) {
+    if (profile.snapshot.trace_function_count) {
         this._progress.updateStatus("Buiding allocation statistics\u2026");
         this._allocationProfile = new WebInspector.AllocationProfile(profile);
         this._progress.updateStatus("Done");
     }
 }
-
-WebInspector.HeapSnapshot.enableAllocationProfiler = false;
 
 /**
  * @constructor
@@ -577,7 +751,6 @@ function HeapSnapshotHeader()
 {
     // New format.
     this.title = "";
-    this.uid = 0;
     this.meta = new HeapSnapshotMetainfo();
     this.node_count = 0;
     this.edge_count = 0;
@@ -640,6 +813,8 @@ WebInspector.HeapSnapshot.prototype = {
         this._calculateRetainedSizes(result.postOrderIndex2NodeOrdinal);
         this._progress.updateStatus("Buiding dominated nodes\u2026");
         this._buildDominatedNodes();
+        this._progress.updateStatus("Calculating statistics\u2026");
+        this._calculateStatistics();
         this._progress.updateStatus("Finished processing.");
     },
 
@@ -744,6 +919,9 @@ WebInspector.HeapSnapshot.prototype = {
         return new WebInspector.HeapSnapshotNodeIterator(this.rootNode());
     },
 
+    /**
+     * @return {!WebInspector.HeapSnapshotNode}
+     */
     rootNode: function()
     {
         return this.createNode(this._rootNodeIndex);
@@ -777,6 +955,7 @@ WebInspector.HeapSnapshot.prototype = {
      * @param {boolean} sortedIndexes
      * @param {string} key
      * @param {string=} filterString
+     * @return {!Object.<string, !WebInspector.HeapSnapshotCommon.Aggregate>}
      */
     aggregates: function(sortedIndexes, key, filterString)
     {
@@ -811,16 +990,26 @@ WebInspector.HeapSnapshot.prototype = {
         return aggregatesByClassName;
     },
 
+    /**
+     * @return {!Array.<!WebInspector.HeapSnapshotCommon.SerializedTraceTop>}
+     */
     allocationTracesTops: function()
     {
         return this._allocationProfile.serializeTraceTops();
     },
 
+    /**
+     * @param {string} nodeId
+     * @return {!WebInspector.HeapSnapshotCommon.AllocationNodeCallers}
+     */
     allocationNodeCallers: function(nodeId)
     {
         return this._allocationProfile.serializeCallers(nodeId);
     },
 
+    /**
+     * @return {!Object.<string, !WebInspector.HeapSnapshotCommon.AggregateForDiff>}
+     */
     aggregatesForDiff: function()
     {
         if (this._aggregatesForDiff)
@@ -1157,8 +1346,8 @@ WebInspector.HeapSnapshot.prototype = {
     // K. Cooper, T. Harvey and K. Kennedy "A Simple, Fast Dominance Algorithm"
     // Softw. Pract. Exper. 4 (2001), pp. 1-10.
     /**
-     * @param {Array.<number>} postOrderIndex2NodeOrdinal
-     * @param {Array.<number>} nodeOrdinal2PostOrderIndex
+     * @param {!Array.<number>} postOrderIndex2NodeOrdinal
+     * @param {!Array.<number>} nodeOrdinal2PostOrderIndex
      */
     _buildDominatorTree: function(postOrderIndex2NodeOrdinal, nodeOrdinal2PostOrderIndex)
     {
@@ -1282,19 +1471,16 @@ WebInspector.HeapSnapshot.prototype = {
         var nodeSelfSizeOffset = this._nodeSelfSizeOffset;
         var nodeFieldCount = this._nodeFieldCount;
         var dominatorsTree = this._dominatorsTree;
-        // Reuse now unused edge_count field to store retained size.
-        var nodeRetainedSizeOffset = this._nodeRetainedSizeOffset = this._nodeEdgeCountOffset;
-        delete this._nodeEdgeCountOffset;
+        var retainedSizes = this._retainedSizes = new Float64Array(nodeCount);
 
-        for (var nodeIndex = 0, l = nodes.length; nodeIndex < l; nodeIndex += nodeFieldCount)
-            nodes[nodeIndex + nodeRetainedSizeOffset] = nodes[nodeIndex + nodeSelfSizeOffset];
+        for (var nodeOrdinal = 0; nodeOrdinal < nodeCount; ++nodeOrdinal)
+            retainedSizes[nodeOrdinal] = nodes[nodeOrdinal * nodeFieldCount + nodeSelfSizeOffset];
 
         // Propagate retained sizes for each node excluding root.
         for (var postOrderIndex = 0; postOrderIndex < nodeCount - 1; ++postOrderIndex) {
             var nodeOrdinal = postOrderIndex2NodeOrdinal[postOrderIndex];
-            var nodeIndex = nodeOrdinal * nodeFieldCount;
-            var dominatorIndex = dominatorsTree[nodeOrdinal] * nodeFieldCount;
-            nodes[dominatorIndex + nodeRetainedSizeOffset] += nodes[nodeIndex + nodeRetainedSizeOffset];
+            var dominatorOrdinal = dominatorsTree[nodeOrdinal];
+            retainedSizes[dominatorOrdinal] += retainedSizes[nodeOrdinal];
         }
     },
 
@@ -1354,11 +1540,21 @@ WebInspector.HeapSnapshot.prototype = {
         throw new Error("Not implemented");
     },
 
+    _calculateStatistics: function()
+    {
+        throw new Error("Not implemented");
+    },
+
     userObjectsMapAndFlag: function()
     {
         throw new Error("Not implemented");
     },
 
+    /**
+     * @param {string} baseSnapshotId
+     * @param {!Object.<string, !WebInspector.HeapSnapshotCommon.AggregateForDiff>} baseSnapshotAggregates
+     * @return {!Object.<string, !WebInspector.HeapSnapshotCommon.Diff>}
+     */
     calculateSnapshotDiff: function(baseSnapshotId, baseSnapshotAggregates)
     {
         var snapshotDiff = this._snapshotDiffs[baseSnapshotId];
@@ -1373,7 +1569,7 @@ WebInspector.HeapSnapshot.prototype = {
             if (diff)
                 snapshotDiff[className] = diff;
         }
-        var emptyBaseAggregate = { ids: [], indexes: [], selfSizes: [] };
+        var emptyBaseAggregate = new WebInspector.HeapSnapshotCommon.AggregateForDiff();
         for (var className in aggregates) {
             if (className in baseSnapshotAggregates)
                 continue;
@@ -1384,6 +1580,11 @@ WebInspector.HeapSnapshot.prototype = {
         return snapshotDiff;
     },
 
+    /**
+     * @param {!WebInspector.HeapSnapshotCommon.AggregateForDiff} baseAggregate
+     * @param {!WebInspector.HeapSnapshotCommon.Aggregate} aggregate
+     * @return {?WebInspector.HeapSnapshotCommon.Diff}
+     */
     _calculateDiffForClass: function(baseAggregate, aggregate)
     {
         var baseIds = baseAggregate.ids;
@@ -1394,12 +1595,7 @@ WebInspector.HeapSnapshot.prototype = {
 
         var i = 0, l = baseIds.length;
         var j = 0, m = indexes.length;
-        var diff = { addedCount: 0,
-                     removedCount: 0,
-                     addedSize: 0,
-                     removedSize: 0,
-                     deletedIndexes: [],
-                     addedIndexes: [] };
+        var diff = new WebInspector.HeapSnapshotCommon.Diff();
 
         var nodeB = this.createNode(indexes[j]);
         while (i < l && j < m) {
@@ -1447,6 +1643,10 @@ WebInspector.HeapSnapshot.prototype = {
         return null;
     },
 
+    /**
+     * @param {string} snapshotObjectId
+     * @return {?string}
+     */
     nodeClassName: function(snapshotObjectId)
     {
         var node = this._nodeForSnapshotObjectId(snapshotObjectId);
@@ -1455,6 +1655,24 @@ WebInspector.HeapSnapshot.prototype = {
         return null;
     },
 
+    /**
+     * @param {string} name
+     * @return {!Array.<number>}
+     */
+    idsOfObjectsWithName: function(name)
+    {
+        var ids = [];
+        for (var it = this._allNodes(); it.hasNext(); it.next()) {
+            if (it.item().name() === name)
+                ids.push(it.item().id());
+        }
+        return ids;
+    },
+
+    /**
+     * @param {string} snapshotObjectId
+     * @return {?Array.<string>}
+     */
     dominatorIdsForNode: function(snapshotObjectId)
     {
         var node = this._nodeForSnapshotObjectId(snapshotObjectId);
@@ -1476,6 +1694,11 @@ WebInspector.HeapSnapshot.prototype = {
         return parsedFilter.bind(this);
     },
 
+    /**
+     * @param {number} nodeIndex
+     * @param {boolean} showHiddenData
+     * @return {!WebInspector.HeapSnapshotEdgesProvider}
+     */
     createEdgesProvider: function(nodeIndex, showHiddenData)
     {
         var node = this.createNode(nodeIndex);
@@ -1483,22 +1706,39 @@ WebInspector.HeapSnapshot.prototype = {
         return new WebInspector.HeapSnapshotEdgesProvider(this, filter, node.edges());
     },
 
+    /**
+     * @param {number} nodeIndex
+     * @return {!WebInspector.HeapSnapshotEdgesProvider}
+     */
     createEdgesProviderForTest: function(nodeIndex, filter)
     {
         var node = this.createNode(nodeIndex);
         return new WebInspector.HeapSnapshotEdgesProvider(this, filter, node.edges());
     },
 
+    /**
+     * @param {boolean} showHiddenData
+     * @return {?function(!WebInspector.HeapSnapshotEdge):boolean}
+     */
     retainingEdgesFilter: function(showHiddenData)
     {
         return null;
     },
 
+    /**
+     * @param {boolean} showHiddenData
+     * @return {?function(!WebInspector.HeapSnapshotEdge):boolean}
+     */
     containmentEdgesFilter: function(showHiddenData)
     {
         return null;
     },
 
+    /**
+     * @param {number} nodeIndex
+     * @param {boolean} showHiddenData
+     * @return {!WebInspector.HeapSnapshotEdgesProvider}
+     */
     createRetainingEdgesProvider: function(nodeIndex, showHiddenData)
     {
         var node = this.createNode(nodeIndex);
@@ -1506,6 +1746,11 @@ WebInspector.HeapSnapshot.prototype = {
         return new WebInspector.HeapSnapshotEdgesProvider(this, filter, node.retainers());
     },
 
+    /**
+     * @param {string} baseSnapshotId
+     * @param {string} className
+     * @return {!WebInspector.HeapSnapshotNodesProvider}
+     */
     createAddedNodesProvider: function(baseSnapshotId, className)
     {
         var snapshotDiff = this._snapshotDiffs[baseSnapshotId];
@@ -1513,36 +1758,75 @@ WebInspector.HeapSnapshot.prototype = {
         return new WebInspector.HeapSnapshotNodesProvider(this, null, diffForClass.addedIndexes);
     },
 
+    /**
+     * @param {!Array.<number>} nodeIndexes
+     * @return {!WebInspector.HeapSnapshotNodesProvider}
+     */
     createDeletedNodesProvider: function(nodeIndexes)
     {
         return new WebInspector.HeapSnapshotNodesProvider(this, null, nodeIndexes);
     },
 
+    /**
+     * @return {?function(!WebInspector.HeapSnapshotNode):boolean}
+     */
     classNodesFilter: function()
     {
         return null;
     },
 
+    /**
+     * @param {string} className
+     * @param {string} aggregatesKey
+     * @return {!WebInspector.HeapSnapshotNodesProvider}
+     */
     createNodesProviderForClass: function(className, aggregatesKey)
     {
         return new WebInspector.HeapSnapshotNodesProvider(this, this.classNodesFilter(), this.aggregates(false, aggregatesKey)[className].idxs);
     },
 
+    /**
+     * @param {number} nodeIndex
+     * @return {!WebInspector.HeapSnapshotNodesProvider}
+     */
     createNodesProviderForDominator: function(nodeIndex)
     {
         var node = this.createNode(nodeIndex);
         return new WebInspector.HeapSnapshotNodesProvider(this, null, this._dominatedNodesOfNode(node));
     },
 
+    /**
+     * @return {number}
+     */
+    _maxJsNodeId: function()
+    {
+        var nodeFieldCount = this._nodeFieldCount;
+        var nodes = this._nodes;
+        var nodesLength = nodes.length;
+        var id = 0;
+        for (var nodeIndex = this._nodeIdOffset; nodeIndex < nodesLength; nodeIndex += nodeFieldCount) {
+            var nextId = nodes[nodeIndex];
+            // JS objects have odd ids, skip native objects.
+            if (nextId % 2 === 0)
+                continue;
+            if (id < nextId)
+                id = nextId;
+        }
+        return id;
+    },
+
+    /**
+     * @return {!WebInspector.HeapSnapshotCommon.StaticData}
+     */
     updateStaticData: function()
     {
-        return {nodeCount: this.nodeCount, rootNodeIndex: this._rootNodeIndex, totalSize: this.totalSize, uid: this.uid};
+        return new WebInspector.HeapSnapshotCommon.StaticData(this.nodeCount, this._rootNodeIndex, this.totalSize, this._maxJsNodeId());
     }
 };
 
 /**
  * @constructor
- * @param {Array.<number>=} unfilteredIterationOrder
+ * @param {!Array.<number>=} unfilteredIterationOrder
  */
 WebInspector.HeapSnapshotFilteredOrderedIterator = function(iterator, filter, unfilteredIterationOrder)
 {
@@ -1593,11 +1877,17 @@ WebInspector.HeapSnapshotFilteredOrderedIterator.prototype = {
         this._position = 0;
     },
 
+    /**
+     * @return {boolean}
+     */
     hasNext: function()
     {
         return this._position < this._iterationOrder.length;
     },
 
+    /**
+     * @return {boolean}
+     */
     isEmpty: function()
     {
         if (this._iterationOrder)
@@ -1624,12 +1914,18 @@ WebInspector.HeapSnapshotFilteredOrderedIterator.prototype = {
         return true;
     },
 
+    /**
+     * @return {*}
+     */
     item: function()
     {
         this._iterator.setIndex(this._iterationOrder[this._position]);
         return this._iterator.item();
     },
 
+    /**
+     * @type {number}
+     */
     get length()
     {
         this._createIterationOrder();
@@ -1644,6 +1940,7 @@ WebInspector.HeapSnapshotFilteredOrderedIterator.prototype = {
     /**
      * @param {number} begin
      * @param {number} end
+     * @return {!WebInspector.HeapSnapshotCommon.ItemsRange}
      */
     serializeItemsRange: function(begin, end)
     {
@@ -1666,12 +1963,7 @@ WebInspector.HeapSnapshotFilteredOrderedIterator.prototype = {
         var result = new Array(count);
         for (var i = 0 ; i < count && this.hasNext(); ++i, this.next())
             result[i] = this.item().serialize();
-        result.length = i;
-        result.totalLength = this._iterationOrder.length;
-
-        result.startPosition = startPosition;
-        result.endPosition = this._position;
-        return result;
+        return new WebInspector.HeapSnapshotCommon.ItemsRange(startPosition, this._position, this._iterationOrder.length, result);
     },
 
     sortAll: function()
@@ -1694,11 +1986,6 @@ WebInspector.HeapSnapshotFilteredOrderedIterator.prototype = {
     }
 }
 
-WebInspector.HeapSnapshotFilteredOrderedIterator.prototype.createComparator = function(fieldNames)
-{
-    return {fieldName1: fieldNames[0], ascending1: fieldNames[1], fieldName2: fieldNames[2], ascending2: fieldNames[3]};
-}
-
 /**
  * @constructor
  * @extends {WebInspector.HeapSnapshotFilteredOrderedIterator}
@@ -1710,6 +1997,13 @@ WebInspector.HeapSnapshotEdgesProvider = function(snapshot, filter, edgesIter)
 }
 
 WebInspector.HeapSnapshotEdgesProvider.prototype = {
+    /**
+     * @param {!WebInspector.HeapSnapshotCommon.ComparatorConfig} comparator
+     * @param {number} leftBound
+     * @param {number} rightBound
+     * @param {number} windowLeft
+     * @param {number} windowRight
+     */
     sort: function(comparator, leftBound, rightBound, windowLeft, windowRight)
     {
         var fieldName1 = comparator.fieldName1;
@@ -1791,7 +2085,7 @@ WebInspector.HeapSnapshotEdgesProvider.prototype = {
 /**
  * @constructor
  * @extends {WebInspector.HeapSnapshotFilteredOrderedIterator}
- * @param {Array.<number>=} nodeIndexes
+ * @param {!Array.<number>=} nodeIndexes
  */
 WebInspector.HeapSnapshotNodesProvider = function(snapshot, filter, nodeIndexes)
 {
@@ -1800,6 +2094,10 @@ WebInspector.HeapSnapshotNodesProvider = function(snapshot, filter, nodeIndexes)
 }
 
 WebInspector.HeapSnapshotNodesProvider.prototype = {
+    /**
+     * @param {string} snapshotObjectId
+     * @return {number}
+     */
     nodePosition: function(snapshotObjectId)
     {
         this._createIterationOrder();

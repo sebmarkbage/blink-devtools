@@ -144,14 +144,6 @@ Node.prototype.rangeBoundaryForOffset = function(offset)
     return { container: node, offset: offset };
 }
 
-/**
- * @param {string} className
- */
-Element.prototype.removeStyleClass = function(className)
-{
-    this.classList.remove(className);
-}
-
 Element.prototype.removeMatchingStyleClasses = function(classNameRegex)
 {
     var regex = new RegExp("(^|\\s+)" + classNameRegex + "($|\\s+)");
@@ -160,60 +152,38 @@ Element.prototype.removeMatchingStyleClasses = function(classNameRegex)
 }
 
 /**
- * @param {string} className
- */
-Element.prototype.addStyleClass = function(className)
-{
-    this.classList.add(className);
-}
-
-/**
- * @param {string} className
- * @return {boolean}
- */
-Element.prototype.hasStyleClass = function(className)
-{
-    return this.classList.contains(className);
-}
-
-/**
- * @param {string} className
- * @param {*} enable
- */
-Element.prototype.enableStyleClass = function(className, enable)
-{
-    if (enable)
-        this.addStyleClass(className);
-    else
-        this.removeStyleClass(className);
-}
-
-/**
  * @param {number|undefined} x
  * @param {number|undefined} y
+ * @param {!Element=} relativeTo
  */
-Element.prototype.positionAt = function(x, y)
+Element.prototype.positionAt = function(x, y, relativeTo)
 {
+    var shift = {x: 0, y: 0};
+    if (relativeTo)
+       shift = relativeTo.boxInWindow(this.ownerDocument.defaultView);
+
     if (typeof x === "number")
-        this.style.setProperty("left", x + "px");
+        this.style.setProperty("left", (shift.x + x) + "px");
     else
         this.style.removeProperty("left");
 
     if (typeof y === "number")
-        this.style.setProperty("top", y + "px");
+        this.style.setProperty("top", (shift.y + y) + "px");
     else
         this.style.removeProperty("top");
 }
 
 Element.prototype.isScrolledToBottom = function()
 {
-    // This code works only for 0-width border
-    return this.scrollTop + this.clientHeight === this.scrollHeight;
+    // This code works only for 0-width border.
+    // Both clientHeight and scrollHeight are rounded to integer values, so we tolerate
+    // one pixel error.
+    return Math.abs(this.scrollTop + this.clientHeight - this.scrollHeight) <= 1;
 }
 
 /**
- * @param {Node} fromNode
- * @param {Node} toNode
+ * @param {!Node} fromNode
+ * @param {!Node} toNode
  */
 function removeSubsequentNodes(fromNode, toNode)
 {
@@ -236,8 +206,8 @@ function Size(width, height)
 }
 
 /**
- * @param {Element=} containerElement
- * @return {Size}
+ * @param {?Element=} containerElement
+ * @return {!Size}
  */
 Element.prototype.measurePreferredSize = function(containerElement)
 {
@@ -251,7 +221,7 @@ Element.prototype.measurePreferredSize = function(containerElement)
 }
 
 /**
- * @param {Event} event
+ * @param {!Event} event
  * @return {boolean}
  */
 Element.prototype.containsEventPoint = function(event)
@@ -277,12 +247,12 @@ Node.prototype.enclosingNodeOrSelfWithNodeName = function(nodeName)
 
 /**
  * @param {string} className
- * @param {Element=} stayWithin
+ * @param {!Element=} stayWithin
  */
 Node.prototype.enclosingNodeOrSelfWithClass = function(className, stayWithin)
 {
     for (var node = this; node && node !== stayWithin && node !== this.ownerDocument; node = node.parentNode)
-        if (node.nodeType === Node.ELEMENT_NODE && node.hasStyleClass(className))
+        if (node.nodeType === Node.ELEMENT_NODE && node.classList.contains(className))
             return node;
     return null;
 }
@@ -393,8 +363,27 @@ function AnchorBox(x, y, width, height)
 }
 
 /**
- * @param {Window} targetWindow
- * @return {AnchorBox}
+ * @param {!AnchorBox} box
+ * @return {!AnchorBox}
+ */
+AnchorBox.prototype.relativeTo = function(box)
+{
+    return new AnchorBox(
+        this.x - box.x, this.y - box.y, this.width, this.height);
+};
+
+/**
+ * @param {!Element} element
+ * @return {!AnchorBox}
+ */
+AnchorBox.prototype.relativeToElement = function(element)
+{
+    return this.relativeTo(element.boxInWindow(element.ownerDocument.defaultView));
+};
+
+/**
+ * @param {!Window} targetWindow
+ * @return {!AnchorBox}
  */
 Element.prototype.offsetRelativeToWindow = function(targetWindow)
 {
@@ -415,8 +404,8 @@ Element.prototype.offsetRelativeToWindow = function(targetWindow)
 }
 
 /**
- * @param {Window} targetWindow
- * @return {AnchorBox}
+ * @param {!Window} targetWindow
+ * @return {!AnchorBox}
  */
 Element.prototype.boxInWindow = function(targetWindow)
 {
@@ -570,6 +559,30 @@ Node.prototype.traversePreviousNode = function(stayWithin)
     return this.parentNode;
 }
 
+/**
+ * @param {*} text
+ * @param {string=} placeholder
+ * @return {boolean} true if was truncated
+ */
+Node.prototype.setTextContentTruncatedIfNeeded = function(text, placeholder)
+{
+    // Huge texts in the UI reduce rendering performance drastically.
+    // Moreover, Blink/WebKit uses <unsigned short> internally for storing text content
+    // length, so texts longer than 65535 are inherently displayed incorrectly.
+    const maxTextContentLength = 65535;
+
+    if (typeof text === "string" && text.length > maxTextContentLength) {
+        this.textContent = typeof placeholder === "string" ? placeholder : text.trimEnd(maxTextContentLength);
+        return true;
+    }
+
+    this.textContent = text;
+    return false;
+}
+
+/**
+ * @return {boolean}
+ */
 function isEnterKey(event) {
     // Check if in IME.
     return event.keyCode !== 229 && event.keyIdentifier === "Enter";
@@ -579,45 +592,3 @@ function consumeEvent(e)
 {
     e.consume();
 }
-
-/**
- * Mutation observers leak memory. Keep track of them and disconnect
- * on unload.
- * @constructor
- * @param {function(Array.<WebKitMutation>)} handler
- */
-function NonLeakingMutationObserver(handler)
-{
-    this._observer = new WebKitMutationObserver(handler);
-    NonLeakingMutationObserver._instances.push(this);
-    if (!NonLeakingMutationObserver._unloadListener) {
-        NonLeakingMutationObserver._unloadListener = function() {
-            while (NonLeakingMutationObserver._instances.length)
-                NonLeakingMutationObserver._instances[NonLeakingMutationObserver._instances.length - 1].disconnect();
-        };
-        window.addEventListener("unload", NonLeakingMutationObserver._unloadListener, false);
-    }
-}
-
-NonLeakingMutationObserver._instances = [];
-
-NonLeakingMutationObserver.prototype = {
-    /**
-     * @param {Element} element
-     * @param {Object} config
-     */
-    observe: function(element, config)
-    {
-        if (this._observer)
-            this._observer.observe(element, config);
-    },
-
-    disconnect: function()
-    {
-        if (this._observer)
-            this._observer.disconnect();
-        NonLeakingMutationObserver._instances.remove(this);
-        delete this._observer;
-    }
-}
-

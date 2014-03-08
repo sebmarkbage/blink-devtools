@@ -30,25 +30,28 @@
  */
 
 /**
- * @param {Element} element
- * @param {?function(Event): boolean} elementDragStart
- * @param {function(Event)} elementDrag
- * @param {?function(Event)} elementDragEnd
- * @param {string} cursor
+ * @param {!Element} element
+ * @param {?function(!MouseEvent): boolean} elementDragStart
+ * @param {function(!MouseEvent)} elementDrag
+ * @param {?function(!MouseEvent)} elementDragEnd
+ * @param {!string} cursor
+ * @param {?string=} hoverCursor
  */
-WebInspector.installDragHandle = function(element, elementDragStart, elementDrag, elementDragEnd, cursor)
+WebInspector.installDragHandle = function(element, elementDragStart, elementDrag, elementDragEnd, cursor, hoverCursor)
 {
-    element.addEventListener("mousedown", WebInspector._elementDragStart.bind(WebInspector, elementDragStart, elementDrag, elementDragEnd, cursor), false);
+    element.addEventListener("mousedown", WebInspector.elementDragStart.bind(WebInspector, elementDragStart, elementDrag, elementDragEnd, cursor), false);
+    if (hoverCursor !== null)
+        element.style.cursor = hoverCursor || cursor;
 }
 
 /**
- * @param {?function(Event)} elementDragStart
- * @param {function(Event)} elementDrag
- * @param {?function(Event)} elementDragEnd
+ * @param {?function(!MouseEvent):boolean} elementDragStart
+ * @param {function(!MouseEvent)} elementDrag
+ * @param {?function(!MouseEvent)} elementDragEnd
  * @param {string} cursor
- * @param {Event} event
+ * @param {?Event} event
  */
-WebInspector._elementDragStart = function(elementDragStart, elementDrag, elementDragEnd, cursor, event)
+WebInspector.elementDragStart = function(elementDragStart, elementDrag, elementDragEnd, cursor, event)
 {
     // Only drag upon left button. Right will likely cause a context menu. So will ctrl-click on mac.
     if (event.button || (WebInspector.isMac() && event.ctrlKey))
@@ -57,7 +60,7 @@ WebInspector._elementDragStart = function(elementDragStart, elementDrag, element
     if (WebInspector._elementDraggingEventListener)
         return;
 
-    if (elementDragStart && !elementDragStart(event))
+    if (elementDragStart && !elementDragStart(/** @type {!MouseEvent} */ (event)))
         return;
 
     if (WebInspector._elementDraggingGlassPane) {
@@ -94,12 +97,18 @@ WebInspector._unregisterMouseOutWhileDragging = function()
     delete WebInspector._mouseOutWhileDraggingTargetDocument;
 }
 
+/**
+ * @param {!Event} event
+ */
 WebInspector._elementDragMove = function(event)
 {
-    if (WebInspector._elementDraggingEventListener(event))
+    if (WebInspector._elementDraggingEventListener(/** @type {!MouseEvent} */ (event)))
         WebInspector._cancelDragEvents(event);
 }
 
+/**
+ * @param {!Event} event
+ */
 WebInspector._cancelDragEvents = function(event)
 {
     var targetDocument = event.target.ownerDocument;
@@ -117,15 +126,18 @@ WebInspector._cancelDragEvents = function(event)
     delete WebInspector._elementEndDraggingEventListener;
 }
 
+/**
+ * @param {!Event} event
+ */
 WebInspector._elementDragEnd = function(event)
 {
     var elementDragEnd = WebInspector._elementEndDraggingEventListener;
 
-    WebInspector._cancelDragEvents(event);
+    WebInspector._cancelDragEvents(/** @type {!MouseEvent} */ (event));
 
     event.preventDefault();
     if (elementDragEnd)
-        elementDragEnd(event);
+        elementDragEnd(/** @type {!MouseEvent} */ (event));
 }
 
 /**
@@ -152,98 +164,9 @@ WebInspector.GlassPane.prototype = {
     }
 }
 
-WebInspector.animateStyle = function(animations, duration, callback)
-{
-    var startTime = new Date().getTime();
-    var hasCompleted = false;
-
-    const animationsLength = animations.length;
-    const propertyUnit = {opacity: ""};
-    const defaultUnit = "px";
-
-    // Pre-process animations.
-    for (var i = 0; i < animationsLength; ++i) {
-        var animation = animations[i];
-        var element = null, start = null, end = null, key = null;
-        for (key in animation) {
-            if (key === "element")
-                element = animation[key];
-            else if (key === "start")
-                start = animation[key];
-            else if (key === "end")
-                end = animation[key];
-        }
-
-        if (!element || !end)
-            continue;
-
-        if (!start) {
-            var computedStyle = element.ownerDocument.defaultView.getComputedStyle(element);
-            start = {};
-            for (key in end)
-                start[key] = parseInt(computedStyle.getPropertyValue(key), 10);
-            animation.start = start;
-        } else
-            for (key in start)
-                element.style.setProperty(key, start[key] + (key in propertyUnit ? propertyUnit[key] : defaultUnit));
-    }
-
-    function animateLoop()
-    {
-        if (hasCompleted)
-            return;
-
-        var complete = new Date().getTime() - startTime;
-
-        // Make style changes.
-        for (var i = 0; i < animationsLength; ++i) {
-            var animation = animations[i];
-            var element = animation.element;
-            var start = animation.start;
-            var end = animation.end;
-            if (!element || !end)
-                continue;
-
-            var style = element.style;
-            for (key in end) {
-                var endValue = end[key];
-                if (complete < duration) {
-                    var startValue = start[key];
-                    // Linear animation.
-                    var newValue = startValue + (endValue - startValue) * complete / duration;
-                    style.setProperty(key, newValue + (key in propertyUnit ? propertyUnit[key] : defaultUnit));
-                } else
-                    style.setProperty(key, endValue + (key in propertyUnit ? propertyUnit[key] : defaultUnit));
-            }
-        }
-
-        // End condition.
-        if (complete >= duration)
-            hasCompleted = true;
-        if (callback)
-            callback(hasCompleted);
-        if (!hasCompleted)
-            window.requestAnimationFrame(animateLoop);
-    }
-
-    function forceComplete()
-    {
-        if (hasCompleted)
-            return;
-
-        duration = 0;
-        animateLoop();
-    }
-
-    window.requestAnimationFrame(animateLoop);
-    return {
-        forceComplete: forceComplete
-    };
-}
-
 WebInspector.isBeingEdited = function(element)
 {
-    if (element.hasStyleClass("text-prompt") || element.nodeName === "INPUT" || element.nodeName === "TEXTAREA")
+    if (element.classList.contains("text-prompt") || element.nodeName === "INPUT" || element.nodeName === "TEXTAREA")
         return true;
 
     if (!WebInspector.__editingCount)
@@ -262,77 +185,17 @@ WebInspector.markBeingEdited = function(element, value)
     if (value) {
         if (element.__editing)
             return false;
-        element.addStyleClass("being-edited");
+        element.classList.add("being-edited");
         element.__editing = true;
         WebInspector.__editingCount = (WebInspector.__editingCount || 0) + 1;
     } else {
         if (!element.__editing)
             return false;
-        element.removeStyleClass("being-edited");
+        element.classList.remove("being-edited");
         delete element.__editing;
         --WebInspector.__editingCount;
     }
     return true;
-}
-
-/**
- * @constructor
- * @param {function(Element,string,string,*,string)} commitHandler
- * @param {function(Element,*)} cancelHandler
- * @param {*=} context
- */
-WebInspector.EditingConfig = function(commitHandler, cancelHandler, context)
-{
-    this.commitHandler = commitHandler;
-    this.cancelHandler = cancelHandler
-    this.context = context;
-
-    /**
-     * Handles the "paste" event, return values are the same as those for customFinishHandler
-     * @type {function(Element)|undefined}
-     */
-    this.pasteHandler;
-
-    /** 
-     * Whether the edited element is multiline
-     * @type {boolean|undefined}
-     */
-    this.multiline;
-
-    /**
-     * Custom finish handler for the editing session (invoked on keydown)
-     * @type {function(Element,*)|undefined}
-     */
-    this.customFinishHandler;
-}
-
-WebInspector.EditingConfig.prototype = {
-    setPasteHandler: function(pasteHandler)
-    {
-        this.pasteHandler = pasteHandler;
-    },
-
-    /**
-     * @param {string} initialValue
-     * @param {Object} mode
-     * @param {string} theme
-     * @param {boolean=} lineWrapping
-     * @param {boolean=} smartIndent
-     */
-    setMultilineOptions: function(initialValue, mode, theme, lineWrapping, smartIndent)
-    {
-        this.multiline = true;
-        this.initialValue = initialValue;
-        this.mode = mode;
-        this.theme = theme;
-        this.lineWrapping = lineWrapping;
-        this.smartIndent = smartIndent;
-    },
-
-    setCustomFinishHandler: function(customFinishHandler)
-    {
-        this.customFinishHandler = customFinishHandler;
-    }
 }
 
 WebInspector.CSSNumberRegex = /^(-?(?:\d+(?:\.\d+)?|\.\d+))$/;
@@ -341,7 +204,7 @@ WebInspector.StyleValueDelimiters = " \xA0\t\n\"':;,/()";
 
 
 /**
-  * @param {Event} event
+  * @param {!Event} event
   * @return {?string}
   */
 WebInspector._valueModificationDirection = function(event)
@@ -363,7 +226,7 @@ WebInspector._valueModificationDirection = function(event)
 
 /**
  * @param {string} hexString
- * @param {Event} event
+ * @param {!Event} event
  */
 WebInspector._modifiedHexValue = function(hexString, event)
 {
@@ -402,7 +265,7 @@ WebInspector._modifiedHexValue = function(hexString, event)
 
 /**
  * @param {number} number
- * @param {Event} event
+ * @param {!Event} event
  */
 WebInspector._modifiedFloatNumber = function(number, event)
 {
@@ -435,11 +298,12 @@ WebInspector._modifiedFloatNumber = function(number, event)
 }
 
 /**
-  * @param {Event} event
-  * @param {Element} element
+  * @param {?Event} event
+  * @param {!Element} element
   * @param {function(string,string)=} finishHandler
   * @param {function(string)=} suggestionHandler
   * @param {function(number):number=} customNumberHandler
+  * @return {boolean}
  */
 WebInspector.handleElementValueModifications = function(event, element, finishHandler, suggestionHandler, customNumberHandler)
 {
@@ -519,217 +383,25 @@ WebInspector.handleElementValueModifications = function(event, element, finishHa
     return false;
 }
 
-/** 
- * @param {Element} element
- * @param {WebInspector.EditingConfig=} config
- * @return {?{cancel: function(), commit: function(), codeMirror: CodeMirror, setWidth: function(number)}}
- */
-WebInspector.startEditing = function(element, config)
-{
-    if (!WebInspector.markBeingEdited(element, true))
-        return null;
-
-    config = config || new WebInspector.EditingConfig(function() {}, function() {});
-    var committedCallback = config.commitHandler;
-    var cancelledCallback = config.cancelHandler;
-    var pasteCallback = config.pasteHandler;
-    var context = config.context;
-    var isMultiline = config.multiline || false;
-    var oldText = isMultiline ? config.initialValue : getContent(element);
-    var moveDirection = "";
-    var oldTabIndex;
-    var codeMirror;
-    var cssLoadView;
-
-    /**
-     * @param {Event} e
-     */
-    function consumeCopy(e)
-    {
-        e.consume();
-    }
-
-    if (isMultiline) {
-        loadScript("CodeMirrorTextEditor.js");
-        cssLoadView = new WebInspector.CodeMirrorCSSLoadView();
-        cssLoadView.show(element);
-        WebInspector.setCurrentFocusElement(element);
-        element.addEventListener("copy", consumeCopy, false);
-        codeMirror = window.CodeMirror(element, {
-            mode: config.mode,
-            lineWrapping: config.lineWrapping,
-            smartIndent: config.smartIndent,
-            autofocus: true,
-            theme: config.theme,
-            value: oldText
-        });
-        codeMirror.getWrapperElement().addStyleClass("source-code");
-        codeMirror.on("cursorActivity", function(cm) {
-            cm.display.cursor.scrollIntoViewIfNeeded(false);
-        });
-    } else {
-        element.addStyleClass("editing");
-
-        oldTabIndex = element.getAttribute("tabIndex");
-        if (typeof oldTabIndex !== "number" || oldTabIndex < 0)
-            element.tabIndex = 0;
-        WebInspector.setCurrentFocusElement(element);
-    }
-
-    /**
-     * @param {number} width
-     */
-    function setWidth(width)
-    {
-        const padding = 30;
-        codeMirror.getWrapperElement().style.width = (width - codeMirror.getWrapperElement().offsetLeft - padding) + "px";
-        codeMirror.refresh();
-    }
-
-    /**
-     * @param {Event=} e
-     */
-    function blurEventListener(e) {
-        if (!isMultiline || !e || !e.relatedTarget || !e.relatedTarget.isSelfOrDescendant(element))
-            editingCommitted.call(element);
-    }
-
-    function getContent(element) {
-        if (isMultiline)
-            return codeMirror.getValue();
-
-        if (element.tagName === "INPUT" && element.type === "text")
-            return element.value;
-
-        return element.textContent;
-    }
-
-    /** @this {Element} */
-    function cleanUpAfterEditing()
-    {
-        WebInspector.markBeingEdited(element, false);
-
-        element.removeEventListener("blur", blurEventListener, isMultiline);
-        element.removeEventListener("keydown", keyDownEventListener, true);
-        if (pasteCallback)
-            element.removeEventListener("paste", pasteEventListener, true);
-
-        WebInspector.restoreFocusFromElement(element);
-
-        if (isMultiline) {
-            element.removeEventListener("copy", consumeCopy, false);
-            cssLoadView.detach();
-            return;
-        }
-
-        this.removeStyleClass("editing");
-        
-        if (typeof oldTabIndex !== "number")
-            element.removeAttribute("tabIndex");
-        else
-            this.tabIndex = oldTabIndex;
-        this.scrollTop = 0;
-        this.scrollLeft = 0;
-    }
-
-    /** @this {Element} */
-    function editingCancelled()
-    {
-        if (isMultiline)
-            codeMirror.setValue(oldText);
-        else {
-            if (this.tagName === "INPUT" && this.type === "text")
-                this.value = oldText;
-            else
-                this.textContent = oldText;
-        }
-
-        cleanUpAfterEditing.call(this);
-
-        cancelledCallback(this, context);
-    }
-
-    /** @this {Element} */
-    function editingCommitted()
-    {
-        cleanUpAfterEditing.call(this);
-
-        committedCallback(this, getContent(this), oldText, context, moveDirection);
-    }
-
-    function defaultFinishHandler(event)
-    {
-        var isMetaOrCtrl = WebInspector.isMac() ?
-            event.metaKey && !event.shiftKey && !event.ctrlKey && !event.altKey :
-            event.ctrlKey && !event.shiftKey && !event.metaKey && !event.altKey;
-        if (isEnterKey(event) && (event.isMetaOrCtrlForTest || !isMultiline || isMetaOrCtrl))
-            return "commit";
-        else if (event.keyCode === WebInspector.KeyboardShortcut.Keys.Esc.code || event.keyIdentifier === "U+001B")
-            return "cancel";
-        else if (!isMultiline && event.keyIdentifier === "U+0009") // Tab key
-            return "move-" + (event.shiftKey ? "backward" : "forward");
-    }
-
-    function handleEditingResult(result, event)
-    {
-        if (result === "commit") {
-            editingCommitted.call(element);
-            event.consume(true);
-        } else if (result === "cancel") {
-            editingCancelled.call(element);
-            event.consume(true);
-        } else if (result && result.startsWith("move-")) {
-            moveDirection = result.substring(5);
-            if (event.keyIdentifier !== "U+0009")
-                blurEventListener();
-        }
-    }
-
-    function pasteEventListener(event)
-    {
-        var result = pasteCallback(event);
-        handleEditingResult(result, event);
-    }
-
-    function keyDownEventListener(event)
-    {
-        var handler = config.customFinishHandler || defaultFinishHandler;
-        var result = handler(event);
-        handleEditingResult(result, event);
-    }
-
-    element.addEventListener("blur", blurEventListener, isMultiline);
-    element.addEventListener("keydown", keyDownEventListener, true);
-    if (pasteCallback)
-        element.addEventListener("paste", pasteEventListener, true);
-
-    return {
-        cancel: editingCancelled.bind(element),
-        commit: editingCommitted.bind(element),
-        codeMirror: codeMirror, // For testing.
-        setWidth: setWidth
-    };
-}
-
 /**
- * @param {number} seconds
+ * @param {number} ms
  * @param {boolean=} higherResolution
  * @return {string}
  */
-Number.secondsToString = function(seconds, higherResolution)
+Number.millisToString = function(ms, higherResolution)
 {
-    if (!isFinite(seconds))
+    if (!isFinite(ms))
         return "-";
 
-    if (seconds === 0)
+    if (ms === 0)
         return "0";
 
-    var ms = seconds * 1000;
     if (higherResolution && ms < 1000)
         return WebInspector.UIString("%.3f\u2009ms", ms);
     else if (ms < 1000)
         return WebInspector.UIString("%.0f\u2009ms", ms);
 
+    var seconds = ms / 1000;
     if (seconds < 60)
         return WebInspector.UIString("%.2f\u2009s", seconds);
 
@@ -743,6 +415,18 @@ Number.secondsToString = function(seconds, higherResolution)
 
     var days = hours / 24;
     return WebInspector.UIString("%.1f\u2009days", days);
+}
+
+/**
+ * @param {number} seconds
+ * @param {boolean=} higherResolution
+ * @return {string}
+ */
+Number.secondsToString = function(seconds, higherResolution)
+{
+    if (!isFinite(seconds))
+        return "-";
+    return Number.millisToString(seconds * 1000, higherResolution);
 }
 
 /**
@@ -796,105 +480,27 @@ WebInspector.copyLinkAddressLabel = function()
     return WebInspector.UIString(WebInspector.useLowerCaseMenuTitles() ? "Copy link address" : "Copy Link Address");
 }
 
-WebInspector.platform = function()
-{
-    if (!WebInspector._platform)
-        WebInspector._platform = InspectorFrontendHost.platform();
-    return WebInspector._platform;
-}
-
-WebInspector.isMac = function()
-{
-    if (typeof WebInspector._isMac === "undefined")
-        WebInspector._isMac = WebInspector.platform() === "mac";
-
-    return WebInspector._isMac;
-}
-
-WebInspector.isWin = function()
-{
-    if (typeof WebInspector._isWin === "undefined")
-        WebInspector._isWin = WebInspector.platform() === "windows";
-
-    return WebInspector._isWin;
-}
-
-WebInspector.PlatformFlavor = {
-    WindowsVista: "windows-vista",
-    MacTiger: "mac-tiger",
-    MacLeopard: "mac-leopard",
-    MacSnowLeopard: "mac-snowleopard",
-    MacLion: "mac-lion",
-    MacMountainLion: "mac-mountain-lion"
-}
-
-WebInspector.platformFlavor = function()
-{
-    function detectFlavor()
-    {
-        const userAgent = navigator.userAgent;
-
-        if (WebInspector.platform() === "windows") {
-            var match = userAgent.match(/Windows NT (\d+)\.(?:\d+)/);
-            if (match && match[1] >= 6)
-                return WebInspector.PlatformFlavor.WindowsVista;
-            return null;
-        } else if (WebInspector.platform() === "mac") {
-            var match = userAgent.match(/Mac OS X\s*(?:(\d+)_(\d+))?/);
-            if (!match || match[1] != 10)
-                return WebInspector.PlatformFlavor.MacSnowLeopard;
-            switch (Number(match[2])) {
-                case 4:
-                    return WebInspector.PlatformFlavor.MacTiger;
-                case 5:
-                    return WebInspector.PlatformFlavor.MacLeopard;
-                case 6:
-                    return WebInspector.PlatformFlavor.MacSnowLeopard;
-                case 7:
-                    return WebInspector.PlatformFlavor.MacLion;
-                case 8:
-                    return WebInspector.PlatformFlavor.MacMountainLion;
-                default:
-                    return "";
-            }
-        }
-    }
-
-    if (!WebInspector._platformFlavor)
-        WebInspector._platformFlavor = detectFlavor();
-
-    return WebInspector._platformFlavor;
-}
-
-WebInspector.port = function()
-{
-    if (!WebInspector._port)
-        WebInspector._port = InspectorFrontendHost.port();
-
-    return WebInspector._port;
-}
-
 WebInspector.installPortStyles = function()
 {
     var platform = WebInspector.platform();
-    document.body.addStyleClass("platform-" + platform);
+    document.body.classList.add("platform-" + platform);
     var flavor = WebInspector.platformFlavor();
     if (flavor)
-        document.body.addStyleClass("platform-" + flavor);
+        document.body.classList.add("platform-" + flavor);
     var port = WebInspector.port();
-    document.body.addStyleClass("port-" + port);
+    document.body.classList.add("port-" + port);
 }
 
 WebInspector._windowFocused = function(event)
 {
     if (event.target.document.nodeType === Node.DOCUMENT_NODE)
-        document.body.removeStyleClass("inactive");
+        document.body.classList.remove("inactive");
 }
 
 WebInspector._windowBlurred = function(event)
 {
     if (event.target.document.nodeType === Node.DOCUMENT_NODE)
-        document.body.addStyleClass("inactive");
+        document.body.classList.add("inactive");
 }
 
 WebInspector.previousFocusElement = function()
@@ -910,6 +516,15 @@ WebInspector.currentFocusElement = function()
 WebInspector._focusChanged = function(event)
 {
     WebInspector.setCurrentFocusElement(event.target);
+}
+
+WebInspector._documentBlurred = function(event)
+{
+    // We want to know when currentFocusElement loses focus to nowhere.
+    // This is the case when event.relatedTarget is null (no element is being focused)
+    // and document.activeElement is reset to default (this is not a window blur).
+    if (!event.relatedTarget && document.activeElement === document.body)
+      WebInspector.setCurrentFocusElement(null);
 }
 
 WebInspector._textInputTypes = ["text", "search", "tel", "url", "email", "password"].keySet(); 
@@ -963,12 +578,24 @@ WebInspector.setToolbarColors = function(backgroundColor, color)
         WebInspector._themeStyleElement = document.createElement("style");
         document.head.appendChild(WebInspector._themeStyleElement);
     }
+    var parsedColor = WebInspector.Color.parse(color);
+    var shadowColor = parsedColor ? parsedColor.invert().setAlpha(0.33).toString(WebInspector.Color.Format.RGBA) : "white";
+    var prefix = WebInspector.isMac() ? "body:not(.undocked)" : "";
     WebInspector._themeStyleElement.textContent =
-        ".toolbar-background {\
-             background-image: none !important;\
-             background-color: " + backgroundColor + " !important;\
-             color: " + color + " !important;\
-         }";
+        String.sprintf(
+            "%s .toolbar-background {\
+                 background-image: none !important;\
+                 background-color: %s !important;\
+                 color: %s !important;\
+             }", prefix, backgroundColor, color) +
+        String.sprintf(
+             "%s .toolbar-background button.status-bar-item .glyph, %s .toolbar-background button.status-bar-item .long-click-glyph {\
+                 background-color: %s;\
+             }", prefix, prefix, color) +
+        String.sprintf(
+             "%s .toolbar-background button.status-bar-item .glyph.shadow, %s .toolbar-background button.status-bar-item .long-click-glyph.shadow {\
+                 background-color: %s;\
+             }", prefix, prefix, shadowColor);
 }
 
 WebInspector.resetToolbarColors = function()
@@ -978,21 +605,21 @@ WebInspector.resetToolbarColors = function()
 }
 
 /**
- * @param {Element} element
+ * @param {!Element} element
  * @param {number} offset
  * @param {number} length
- * @param {Array.<Object>=} domChanges
+ * @param {!Array.<!Object>=} domChanges
  */
 WebInspector.highlightSearchResult = function(element, offset, length, domChanges)
 {
-    var result = WebInspector.highlightSearchResults(element, [{offset: offset, length: length }], domChanges);
+    var result = WebInspector.highlightSearchResults(element, [new WebInspector.SourceRange(offset, length)], domChanges);
     return result.length ? result[0] : null;
 }
 
 /**
- * @param {Element} element
- * @param {Array.<Object>} resultRanges
- * @param {Array.<Object>=} changes
+ * @param {!Element} element
+ * @param {!Array.<!WebInspector.SourceRange>} resultRanges
+ * @param {!Array.<!Object>=} changes
  */
 WebInspector.highlightSearchResults = function(element, resultRanges, changes)
 {
@@ -1000,10 +627,30 @@ WebInspector.highlightSearchResults = function(element, resultRanges, changes)
 }
 
 /**
- * @param {Element} element
- * @param {Array.<Object>} resultRanges
+ * @param {!Element} element
+ * @param {string} className
+ */
+WebInspector.runCSSAnimationOnce = function(element, className)
+{
+    function animationEndCallback()
+    {
+        element.classList.remove(className);
+        element.removeEventListener("animationend", animationEndCallback, false);
+    }
+
+    if (element.classList.contains(className))
+        element.classList.remove(className);
+
+    element.addEventListener("animationend", animationEndCallback, false);
+    element.classList.add(className);
+}
+
+/**
+ * @param {!Element} element
+ * @param {!Array.<!WebInspector.SourceRange>} resultRanges
  * @param {string} styleClass
- * @param {Array.<Object>=} changes
+ * @param {!Array.<!Object>=} changes
+ * @return {!Array.<!Element>}
  */
 WebInspector.highlightRangesWithStyleClass = function(element, resultRanges, styleClass, changes)
 {
@@ -1141,7 +788,7 @@ WebInspector.endBatchUpdate = function()
 }
 
 /**
- * @param {Object} object
+ * @param {!Object} object
  * @param {function()} method
  */
 WebInspector.invokeOnceAfterBatchUpdate = function(object, method)
@@ -1159,31 +806,17 @@ WebInspector.invokeOnceAfterBatchUpdate = function(object, method)
     methods.put(method);
 }
 
-/**
- * This bogus view is needed to load/unload CodeMirror-related CSS on demand.
- *
- * @constructor
- * @extends {WebInspector.View}
- */
-WebInspector.CodeMirrorCSSLoadView = function()
-{
-    WebInspector.View.call(this);
-    this.element.addStyleClass("hidden");
-    this.registerRequiredCSS("cm/codemirror.css");
-    this.registerRequiredCSS("cm/cmdevtools.css");
-}
-
-WebInspector.CodeMirrorCSSLoadView.prototype = {
-    __proto__: WebInspector.View.prototype
-}
-
 ;(function() {
 
+/**
+ * @this {Window}
+ */
 function windowLoaded()
 {
     window.addEventListener("focus", WebInspector._windowFocused, false);
     window.addEventListener("blur", WebInspector._windowBlurred, false);
     document.addEventListener("focus", WebInspector._focusChanged.bind(this), true);
+    document.addEventListener("blur", WebInspector._documentBlurred.bind(this), true);
     window.removeEventListener("DOMContentLoaded", windowLoaded, false);
 }
 

@@ -29,28 +29,28 @@
 /**
  * @constructor
  * @extends {WebInspector.SelectionDialogContentProvider}
- * @param {WebInspector.View} view
- * @param {WebInspector.UISourceCode} uiSourceCode
+ * @param {!WebInspector.UISourceCode} uiSourceCode
+ * @param {function(number, number)} selectItemCallback
  */
-WebInspector.StyleSheetOutlineDialog = function(view, uiSourceCode)
+WebInspector.StyleSheetOutlineDialog = function(uiSourceCode, selectItemCallback)
 {
     WebInspector.SelectionDialogContentProvider.call(this);
-
-    this._rules = [];
-    this._view = view;
-    this._uiSourceCode = uiSourceCode;
-    this._requestItems();
+    this._selectItemCallback = selectItemCallback;
+    this._cssParser = new WebInspector.CSSParser();
+    this._cssParser.addEventListener(WebInspector.CSSParser.Events.RulesParsed, this.refresh.bind(this));
+    this._cssParser.parse(uiSourceCode.workingCopy());
 }
 
 /**
- * @param {WebInspector.View} view
- * @param {WebInspector.UISourceCode} uiSourceCode
+ * @param {!WebInspector.View} view
+ * @param {!WebInspector.UISourceCode} uiSourceCode
+ * @param {function(number, number)} selectItemCallback
  */
-WebInspector.StyleSheetOutlineDialog.show = function(view, uiSourceCode)
+WebInspector.StyleSheetOutlineDialog.show = function(view, uiSourceCode, selectItemCallback)
 {
     if (WebInspector.Dialog.currentInstance())
         return null;
-    var delegate = new WebInspector.StyleSheetOutlineDialog(view, uiSourceCode);
+    var delegate = new WebInspector.StyleSheetOutlineDialog(uiSourceCode, selectItemCallback);
     var filteredItemSelectionDialog = new WebInspector.FilteredItemSelectionDialog(delegate);
     WebInspector.Dialog.show(view.element, filteredItemSelectionDialog);
 }
@@ -61,7 +61,7 @@ WebInspector.StyleSheetOutlineDialog.prototype = {
      */
     itemCount: function()
     {
-        return this._rules.length;
+        return this._cssParser.rules().length;
     },
 
     /**
@@ -70,7 +70,8 @@ WebInspector.StyleSheetOutlineDialog.prototype = {
      */
     itemKeyAt: function(itemIndex)
     {
-        return this._rules[itemIndex].selectorText;
+        var rule = this._cssParser.rules()[itemIndex];
+        return rule.selectorText || rule.atRule;
     },
 
     /**
@@ -80,53 +81,22 @@ WebInspector.StyleSheetOutlineDialog.prototype = {
      */
     itemScoreAt: function(itemIndex, query)
     {
-        var rule = this._rules[itemIndex];
-        return -rule.rawLocation.lineNumber;
+        var rule = this._cssParser.rules()[itemIndex];
+        return -rule.lineNumber;
     },
 
     /**
      * @param {number} itemIndex
      * @param {string} query
-     * @param {Element} titleElement
-     * @param {Element} subtitleElement
+     * @param {!Element} titleElement
+     * @param {!Element} subtitleElement
      */
     renderItem: function(itemIndex, query, titleElement, subtitleElement)
     {
-        var rule = this._rules[itemIndex];
-        titleElement.textContent = rule.selectorText;
+        var rule = this._cssParser.rules()[itemIndex];
+        titleElement.textContent = rule.selectorText || rule.atRule;
         this.highlightRanges(titleElement, query);
-        subtitleElement.textContent = ":" + (rule.rawLocation.lineNumber + 1);
-    },
-
-    _requestItems: function()
-    {
-        function didGetAllStyleSheets(error, infos)
-        {
-            if (error)
-                return;
-
-            for (var i = 0; i < infos.length; ++i) {
-                var info = infos[i];
-                if (info.sourceURL === this._uiSourceCode.url) {
-                    WebInspector.CSSStyleSheet.createForId(info.styleSheetId, didGetStyleSheet.bind(this));
-                    return;
-                }
-            }
-        }
-
-        CSSAgent.getAllStyleSheets(didGetAllStyleSheets.bind(this));
-
-        /**
-         * @param {?WebInspector.CSSStyleSheet} styleSheet
-         */
-        function didGetStyleSheet(styleSheet)
-        {
-            if (!styleSheet)
-                return;
-
-            this._rules = styleSheet.rules;
-            this.refresh();
-        }
+        subtitleElement.textContent = ":" + (rule.lineNumber + 1);
     },
 
     /**
@@ -135,11 +105,15 @@ WebInspector.StyleSheetOutlineDialog.prototype = {
      */
     selectItem: function(itemIndex, promptValue)
     {
-        var rule = this._rules[itemIndex];
-        var lineNumber = rule.rawLocation.lineNumber;
+        var rule = this._cssParser.rules()[itemIndex];
+        var lineNumber = rule.lineNumber;
         if (!isNaN(lineNumber) && lineNumber >= 0)
-            this._view.highlightPosition(lineNumber, rule.rawLocation.columnNumber);
-        this._view.focus();
+            this._selectItemCallback(lineNumber, rule.columnNumber);
+    },
+
+    dispose: function()
+    {
+        this._cssParser.dispose();
     },
 
     __proto__: WebInspector.SelectionDialogContentProvider.prototype

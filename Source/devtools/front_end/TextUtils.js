@@ -100,6 +100,10 @@ WebInspector.TextUtils = {
         return WebInspector.TextUtils.isOpeningBraceChar(char) || WebInspector.TextUtils.isClosingBraceChar(char);
     },
 
+    /**
+     * @param {string} text
+     * @return {!Array.<string>}
+     */
     textToWords: function(text)
     {
         var words = [];
@@ -116,6 +120,39 @@ WebInspector.TextUtils = {
             words.push(text.substring(startWord));
         return words;
     },
+
+    /**
+     * @param {string} source
+     * @param {number=} startIndex
+     * @param {number=} lastIndex
+     * @return {number}
+     */
+    findBalancedCurlyBrackets: function(source, startIndex, lastIndex) {
+        lastIndex = lastIndex || source.length;
+        startIndex = startIndex || 0;
+        var counter = 0;
+        var inString = false;
+
+        for (var index = startIndex; index < lastIndex; ++index) {
+            var character = source[index];
+            if (inString) {
+                if (character === "\\")
+                    ++index;
+                else if (character === "\"")
+                    inString = false;
+            } else {
+                if (character === "\"")
+                    inString = true;
+                else if (character === "{")
+                    ++counter;
+                else if (character === "}") {
+                    if (--counter === 0)
+                        return index + 1;
+                }
+            }
+        }
+        return -1;
+    }
 }
 
 WebInspector.TextUtils._SpaceCharRegex = /\s/;

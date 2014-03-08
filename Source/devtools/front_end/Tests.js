@@ -67,8 +67,8 @@ TestSuite.prototype.fail = function(message)
 
 /**
  * Equals assertion tests that expected === actual.
- * @param {Object} expected Expected object.
- * @param {Object} actual Actual object.
+ * @param {!Object} expected Expected object.
+ * @param {!Object} actual Actual object.
  * @param {string} opt_message User message to print if the test fails.
  */
 TestSuite.prototype.assertEquals = function(expected, actual, opt_message)
@@ -83,7 +83,7 @@ TestSuite.prototype.assertEquals = function(expected, actual, opt_message)
 
 /**
  * True assertion tests that value == true.
- * @param {Object} value Actual object.
+ * @param {!Object} value Actual object.
  * @param {string} opt_message User message to print if the test fails.
  */
 TestSuite.prototype.assertTrue = function(value, opt_message)
@@ -94,7 +94,7 @@ TestSuite.prototype.assertTrue = function(value, opt_message)
 
 /**
  * HasKey assertion tests that object has given key.
- * @param {Object} object
+ * @param {!Object} object
  * @param {string} key
  */
 TestSuite.prototype.assertHasKey = function(object, key)
@@ -194,10 +194,10 @@ TestSuite.prototype.showPanel = function(panelName)
 
 /**
  * Overrides the method with specified name until it's called first time.
- * @param {Object} receiver An object whose method to override.
+ * @param {!Object} receiver An object whose method to override.
  * @param {string} methodName Name of the method to override.
- * @param {Function} override A function that should be called right after the
- *     overriden method returns.
+ * @param {!Function} override A function that should be called right after the
+ *     overridden method returns.
  * @param {boolean} opt_sticky Whether restore original method after first run
  *     or not.
  */
@@ -611,6 +611,7 @@ TestSuite.prototype.testTimelineFrames = function()
 TestSuite.prototype.testPageOverlayUpdate = function()
 {
     var test = this;
+    WebInspector.panel("elements");
 
     function populatePage()
     {
@@ -628,12 +629,12 @@ TestSuite.prototype.testPageOverlayUpdate = function()
     {
         test.evaluateInConsole_(populatePage.toString() + "; populatePage();" +
                                 "inspect(document.getElementById('div1'))", function() {});
-        WebInspector.notifications.addEventListener(WebInspector.ElementsTreeOutline.Events.SelectedNodeChanged, step2);
+        WebInspector.notifications.addEventListener(WebInspector.NotificationService.Events.SelectedNodeChanged, step2);
     }
 
     function step2()
     {
-        WebInspector.notifications.removeEventListener(WebInspector.ElementsTreeOutline.Events.SelectedNodeChanged, step2);
+        WebInspector.notifications.removeEventListener(WebInspector.NotificationService.Events.SelectedNodeChanged, step2);
         test.recordTimeline(onTimelineRecorded);
         setTimeout(step3, 500);
     }
@@ -641,12 +642,12 @@ TestSuite.prototype.testPageOverlayUpdate = function()
     function step3()
     {
         test.evaluateInConsole_("inspect(document.getElementById('div2'))", function() {});
-        WebInspector.notifications.addEventListener(WebInspector.ElementsTreeOutline.Events.SelectedNodeChanged, step4);
+        WebInspector.notifications.addEventListener(WebInspector.NotificationService.Events.SelectedNodeChanged, step4);
     }
 
     function step4()
     {
-        WebInspector.notifications.removeEventListener(WebInspector.ElementsTreeOutline.Events.SelectedNodeChanged, step4);
+        WebInspector.notifications.removeEventListener(WebInspector.NotificationService.Events.SelectedNodeChanged, step4);
         test.stopTimeline();
     }
 
@@ -672,7 +673,7 @@ TestSuite.prototype.testPageOverlayUpdate = function()
 
 /**
  * Records timeline till console.timeStamp("ready"), invokes callback with resulting records.
- * @param {function(Array.<Object>)} callback
+ * @param {function(!Array.<!Object>)} callback
  */
 TestSuite.prototype.recordTimeline = function(callback)
 {
@@ -715,16 +716,16 @@ TestSuite.prototype.waitForTestResultsInConsole = function()
 {
     var messages = WebInspector.console.messages;
     for (var i = 0; i < messages.length; ++i) {
-        var text = messages[i].text;
+        var text = messages[i].messageText;
         if (text === "PASS")
             return;
         else if (/^FAIL/.test(text))
             this.fail(text); // This will throw.
     }
-    // Neitwer PASS nor FAIL, so wait for more messages.
+    // Neither PASS nor FAIL, so wait for more messages.
     function onConsoleMessage(event)
     {
-        var text = event.data.text;
+        var text = event.data.messageText;
         if (text === "PASS")
             this.releaseControl();
         else if (/^FAIL/.test(text))
@@ -782,7 +783,7 @@ TestSuite.prototype.checkLogAndErrorMessages = function()
 
 /**
  * Serializes array of uiSourceCodes to string.
- * @param {Array.<WebInspectorUISourceCode>} uiSourceCodes
+ * @param {!Array.<!WebInspectorUISourceCode>} uiSourceCodes
  * @return {string}
  */
 TestSuite.prototype.uiSourceCodesToString_ = function(uiSourceCodes)
@@ -796,7 +797,7 @@ TestSuite.prototype.uiSourceCodesToString_ = function(uiSourceCodes)
 
 /**
  * Returns all loaded non anonymous uiSourceCodes.
- * @return {Array.<WebInspectorUISourceCode>}
+ * @return {!Array.<!WebInspectorUISourceCode>}
  */
 TestSuite.prototype.nonAnonymousUISourceCodes_ = function()
 {
@@ -824,22 +825,33 @@ TestSuite.prototype.nonAnonymousUISourceCodes_ = function()
  */
 TestSuite.prototype.evaluateInConsole_ = function(code, callback)
 {
-    WebInspector.showConsole();
-    WebInspector.consoleView.prompt.text = code;
-    WebInspector.consoleView.promptElement.dispatchEvent(TestSuite.createKeyEvent("Enter"));
+    WebInspector.console.show();
+    var consoleView = WebInspector.ConsolePanel._view();
+    consoleView.prompt.text = code;
+    consoleView.promptElement.dispatchEvent(TestSuite.createKeyEvent("Enter"));
 
     this.addSniffer(WebInspector.ConsoleView.prototype, "_showConsoleMessage",
         function(messageIndex) {
             var commandResult = WebInspector.console.messages[messageIndex];
-            callback(commandResult.toMessageElement().textContent);
-        });
+            callback(this._consoleViewMessage(commandResult).toMessageElement().textContent);
+        }.bind(this));
 };
 
 
 /**
+ * Converts a WebInspector.ConsoleMessage into WebInspector.ConsoleViewMessage.
+ * @param {!WebInspector.ConsoleMessage} message
+ * @return {!WebInspector.ConsoleViewMessage|undefined}
+ */
+TestSuite.prototype._consoleViewMessage = function(message)
+{
+    return WebInspector.ConsolePanel._view()._messageToViewMessage.get(message);
+}
+
+/**
  * Checks that all expected scripts are present in the scripts list
  * in the Scripts panel.
- * @param {Array.<string>} expected Regular expressions describing
+ * @param {!Array.<string>} expected Regular expressions describing
  *     expected script names.
  * @return {boolean} Whether all the scripts are in "scripts-files" select
  *     box
