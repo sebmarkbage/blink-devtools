@@ -35,13 +35,11 @@ WebInspector.Panel = function(name)
     WebInspector.View.call(this);
     WebInspector.panels[name] = this;
 
-    this.element.addStyleClass("panel");
-    this.element.addStyleClass(name);
+    this.element.classList.add("panel");
+    this.element.classList.add(name);
     this._panelName = name;
 
     this._shortcuts = /** !Object.<number, function(Event=):boolean> */ ({});
-
-    WebInspector.settings[this._sidebarWidthSettingName()] = WebInspector.settings.createSetting(this._sidebarWidthSettingName(), undefined);
 }
 
 // Should by in sync with style declarations.
@@ -57,13 +55,16 @@ WebInspector.Panel.prototype = {
     {
     },
 
+    /**
+     * @return {!Element}
+     */
     defaultFocusedElement: function()
     {
-        return this.sidebarTreeElement || this.element;
+        return this.element;
     },
 
     /**
-     * @return {WebInspector.SearchableView}
+     * @return {?WebInspector.SearchableView}
      */
     searchableView: function()
     {
@@ -85,86 +86,21 @@ WebInspector.Panel.prototype = {
     {
     },
 
-    /**
-     * @param {Element=} parentElement
-     * @param {string=} position
-     * @param {number=} defaultWidth
-     * @param {number=} defaultHeight
-     */
-    createSidebarView: function(parentElement, position, defaultWidth, defaultHeight)
-    {
-        if (this.splitView)
-            return;
-
-        if (!parentElement)
-            parentElement = this.element;
-
-        this.splitView = new WebInspector.SidebarView(position, this._sidebarWidthSettingName(), defaultWidth, defaultHeight);
-        this.splitView.show(parentElement);
-        this.splitView.addEventListener(WebInspector.SidebarView.EventTypes.Resized, this.sidebarResized.bind(this));
-
-        this.sidebarElement = this.splitView.sidebarElement;
-    },
-
-    /**
-     * @param {Element=} parentElement
-     * @param {string=} position
-     * @param {number=} defaultWidth
-     */
-    createSidebarViewWithTree: function(parentElement, position, defaultWidth)
-    {
-        if (this.splitView)
-            return;
-
-        this.createSidebarView(parentElement, position);
-
-        this.sidebarTreeElement = document.createElement("ol");
-        this.sidebarTreeElement.className = "sidebar-tree";
-        this.splitView.sidebarElement.appendChild(this.sidebarTreeElement);
-        this.splitView.sidebarElement.addStyleClass("sidebar");
-
-        this.sidebarTree = new TreeOutline(this.sidebarTreeElement);
-        this.sidebarTree.panel = this;
-    },
-
-    _sidebarWidthSettingName: function()
-    {
-        return this._panelName + "SidebarWidth";
-    },
-
     // Should be implemented by ancestors.
-
     get statusBarItems()
     {
     },
 
     /**
-     * @param {WebInspector.Event} event
+     * @return {!Array.<!Element>}
      */
-    sidebarResized: function(event)
-    {
-    },
-
-    statusBarResized: function()
-    {
-    },
-
-    /**
-     * @param {Element} anchor
-     * @return {boolean}
-     */
-    showAnchorLocation: function(anchor)
-    {
-        return false;
-    },
-
     elementsToRestoreScrollPositionsFor: function()
     {
         return [];
     },
 
     /**
-     * @param {KeyboardEvent} event
+     * @param {!KeyboardEvent} event
      */
     handleShortcut: function(event)
     {
@@ -197,7 +133,7 @@ WebInspector.Panel.prototype = {
 
     /**
      * @param {!Array.<!WebInspector.KeyboardShortcut.Descriptor>} keys
-     * @param {function(Event=):boolean} handler
+     * @param {function(?Event=):boolean} handler
      */
     registerShortcuts: function(keys, handler)
     {
@@ -209,23 +145,98 @@ WebInspector.Panel.prototype = {
 }
 
 /**
+ * @extends {WebInspector.Panel}
+ * @param {number=} defaultWidth
  * @constructor
- * @param {string} name
- * @param {string} title
- * @param {string=} className
- * @param {string=} scriptName
- * @param {WebInspector.Panel=} panel
  */
-WebInspector.PanelDescriptor = function(name, title, className, scriptName, panel)
+WebInspector.PanelWithSidebarTree = function(name, defaultWidth)
 {
-    this._name = name;
-    this._title = title;
-    this._className = className;
-    this._scriptName = scriptName;
-    this._panel = panel;
+    WebInspector.Panel.call(this, name);
+
+    this._panelSplitView = new WebInspector.SplitView(true, false, this._panelName + "PanelSplitViewState", defaultWidth || 200);
+    this._panelSplitView.setSidebarElementConstraints(Preferences.minSidebarWidth);
+    this._panelSplitView.show(this.element);
+
+    var sidebarElement = this._panelSplitView.sidebarElement();
+    sidebarElement.classList.add("sidebar");
+    var sidebarTreeElement = sidebarElement.createChild("ol", "sidebar-tree");
+    this.sidebarTree = new TreeOutline(sidebarTreeElement);
+}
+
+WebInspector.PanelWithSidebarTree.prototype = {
+    /**
+     * @return {!Element}
+     */
+    sidebarElement: function()
+    {
+        return this._panelSplitView.sidebarElement();
+    },
+
+    /**
+     * @return {!Element} element
+     */
+    mainElement: function()
+    {
+        return this._panelSplitView.mainElement();
+    },
+
+    /**
+     * @param {number=} minWidth
+     * @param {number=} minHeight
+     */
+    setMainElementConstraints: function(minWidth, minHeight)
+    {
+        this._panelSplitView.setMainElementConstraints(minWidth, minHeight);
+    },
+
+    /**
+     * @return {!Element}
+     */
+    defaultFocusedElement: function()
+    {
+        return this.sidebarTree.element || this.element;
+    },
+
+    __proto__: WebInspector.Panel.prototype
+}
+
+/**
+ * @interface
+ */
+WebInspector.PanelDescriptor = function()
+{
 }
 
 WebInspector.PanelDescriptor.prototype = {
+    /**
+     * @return {string}
+     */
+    name: function() {},
+
+    /**
+     * @return {string}
+     */
+    title: function() {},
+
+    /**
+     * @return {!WebInspector.Panel}
+     */
+    panel: function() {}
+}
+
+/**
+ * @constructor
+ * @param {!WebInspector.ModuleManager.Extension} extension
+ * @implements {WebInspector.PanelDescriptor}
+ */
+WebInspector.ModuleManagerExtensionPanelDescriptor = function(extension)
+{
+    this._name = extension.descriptor()["name"];
+    this._title = WebInspector.UIString(extension.descriptor()["title"]);
+    this._extension = extension;
+}
+
+WebInspector.ModuleManagerExtensionPanelDescriptor.prototype = {
     /**
      * @return {string}
      */
@@ -243,25 +254,10 @@ WebInspector.PanelDescriptor.prototype = {
     },
 
     /**
-     * @return {WebInspector.Panel}
+     * @return {!WebInspector.Panel}
      */
     panel: function()
     {
-        if (this._panel)
-            return this._panel;
-        if (!this._isCreatingPanel) {
-            var oldStackTraceLimit = Error.stackTraceLimit;
-            Error.stackTraceLimit = 50;
-            console.assert(!this._isCreatingPanel, "PanelDescriptor.panel() is called from inside itself: " + new Error().stack);
-            Error.stackTraceLimit = oldStackTraceLimit;
-        }
-        if (this._scriptName)
-            loadScript(this._scriptName);
-        this._isCreatingPanel = true;
-        this._panel = new WebInspector[this._className];
-        delete this._isCreatingPanel;
-        return this._panel;
-    },
-
-    registerShortcuts: function() {}
+        return /** @type {!WebInspector.Panel} */ (this._extension.instance());
+    }
 }

@@ -31,20 +31,20 @@
 /**
  * @extends {WebInspector.View}
  * @constructor
- * @param {WebInspector.ContentProvider} contentProvider
+ * @implements {WebInspector.Replaceable}
+ * @param {!WebInspector.ContentProvider} contentProvider
  */
 WebInspector.SourceFrame = function(contentProvider)
 {
     WebInspector.View.call(this);
-    this.element.addStyleClass("script-view");
-    this.element.addStyleClass("fill");
+    this.element.classList.add("script-view");
 
     this._url = contentProvider.contentURL();
     this._contentProvider = contentProvider;
 
     var textEditorDelegate = new WebInspector.TextEditorDelegateForSourceFrame(this);
 
-    loadScript("CodeMirrorTextEditor.js");
+    WebInspector.moduleManager.loadModule("codemirror");
     this._textEditor = new WebInspector.CodeMirrorTextEditor(this._url, textEditorDelegate);
 
     this._currentSearchResultIndex = -1;
@@ -57,7 +57,6 @@ WebInspector.SourceFrame = function(contentProvider)
     this._textEditor.setReadOnly(!this.canEditSource());
 
     this._shortcuts = {};
-    this.addShortcut(WebInspector.KeyboardShortcut.makeKey("s", WebInspector.KeyboardShortcut.Modifiers.CtrlOrMeta), this._commitEditing.bind(this));
     this.element.addEventListener("keydown", this._handleKeyDown.bind(this), false);
 
     this._sourcePosition = new WebInspector.StatusBarText("", "source-frame-cursor-position");
@@ -92,7 +91,8 @@ WebInspector.SourceFrame.createSearchRegex = function(query, modifiers)
 
 WebInspector.SourceFrame.Events = {
     ScrollChanged: "ScrollChanged",
-    SelectionChanged: "SelectionChanged"
+    SelectionChanged: "SelectionChanged",
+    JumpHappened: "JumpHappened"
 }
 
 WebInspector.SourceFrame.prototype = {
@@ -138,13 +138,16 @@ WebInspector.SourceFrame.prototype = {
     },
 
     /**
-     * @return {Array.<Element>}
+     * @return {!Array.<!Element>}
      */
     statusBarItems: function()
     {
         return [];
     },
 
+    /**
+     * @return {!Element}
+     */
     defaultFocusedElement: function()
     {
         return this._textEditor.defaultFocusedElement();
@@ -155,6 +158,9 @@ WebInspector.SourceFrame.prototype = {
         return this._loaded;
     },
 
+    /**
+     * @return {boolean}
+     */
     hasContent: function()
     {
         return true;
@@ -195,6 +201,7 @@ WebInspector.SourceFrame.prototype = {
 
     /**
      * @override
+     * @return {boolean}
      */
     canHighlightPosition: function()
     {
@@ -285,7 +292,15 @@ WebInspector.SourceFrame.prototype = {
     },
 
     /**
-     * @param {WebInspector.TextRange} textRange
+     * @return {!WebInspector.TextRange}
+     */
+    selection: function()
+    {
+        return this.textEditor.selection();
+    },
+
+    /**
+     * @param {!WebInspector.TextRange} textRange
      */
     setSelection: function(textRange)
     {
@@ -404,12 +419,16 @@ WebInspector.SourceFrame.prototype = {
     /**
      * @param {string} query
      * @param {boolean} shouldJump
-     * @param {function(WebInspector.View, number)} callback
+     * @param {function(!WebInspector.View, number)} callback
      * @param {function(number)} currentMatchChangedCallback
      * @param {function()} searchResultsChangedCallback
      */
     performSearch: function(query, shouldJump, callback, currentMatchChangedCallback, searchResultsChangedCallback)
     {
+        /**
+         * @param {string} query
+         * @this {WebInspector.SourceFrame}
+         */
         function doFindSearchMatches(query)
         {
             this._currentSearchResultIndex = -1;
@@ -480,6 +499,9 @@ WebInspector.SourceFrame.prototype = {
             this._textEditor.setSelection(range);
     },
 
+    /**
+     * @return {boolean}
+     */
     hasSearchResults: function()
     {
         return this._searchResults.length > 0;
@@ -508,11 +530,17 @@ WebInspector.SourceFrame.prototype = {
         this.jumpToSearchResult(currentIndex - 1);
     },
 
+    /**
+     * @return {boolean}
+     */
     showingFirstSearchResult: function()
     {
         return this._searchResults.length &&  this._currentSearchResultIndex === 0;
     },
 
+    /**
+     * @return {boolean}
+     */
     showingLastSearchResult: function()
     {
         return this._searchResults.length && this._currentSearchResultIndex === (this._searchResults.length - 1);
@@ -536,7 +564,7 @@ WebInspector.SourceFrame.prototype = {
     /**
      * @param {string} text
      */
-    replaceSearchMatchWith: function(text)
+    replaceSelectionWith: function(text)
     {
         var range = this._searchResults[this._currentSearchResultIndex];
         if (!range)
@@ -599,7 +627,7 @@ WebInspector.SourceFrame.prototype = {
 
     /**
      * @param {number} lineNumber
-     * @param {WebInspector.ConsoleMessage} msg
+     * @param {!WebInspector.ConsoleMessage} msg
      */
     addMessageToSource: function(lineNumber, msg)
     {
@@ -637,11 +665,11 @@ WebInspector.SourceFrame.prototype = {
         var imageElement = document.createElement("div");
         switch (msg.level) {
             case WebInspector.ConsoleMessage.MessageLevel.Error:
-                messageBubbleElement.addStyleClass("webkit-html-error-message");
+                messageBubbleElement.classList.add("webkit-html-error-message");
                 imageElement.className = "error-icon-small";
                 break;
             case WebInspector.ConsoleMessage.MessageLevel.Warning:
-                messageBubbleElement.addStyleClass("webkit-html-warning-message");
+                messageBubbleElement.classList.add("webkit-html-warning-message");
                 imageElement.className = "warning-icon-small";
                 break;
         }
@@ -652,7 +680,7 @@ WebInspector.SourceFrame.prototype = {
 
         // Create the image element in the Inspector's document so we can use relative image URLs.
         messageLineElement.appendChild(imageElement);
-        messageLineElement.appendChild(document.createTextNode(msg.message));
+        messageLineElement.appendChild(document.createTextNode(msg.messageText));
 
         rowMessage.element = messageLineElement;
         rowMessage.repeatCount = msg.totalRepeatCount;
@@ -676,7 +704,7 @@ WebInspector.SourceFrame.prototype = {
 
     /**
      * @param {number} lineNumber
-     * @param {WebInspector.ConsoleMessage} msg
+     * @param {!WebInspector.ConsoleMessage} msg
      */
     removeMessageFromSource: function(lineNumber, msg)
     {
@@ -713,6 +741,18 @@ WebInspector.SourceFrame.prototype = {
     {
     },
 
+    /**
+     * @param {?WebInspector.TextRange} from
+     * @param {?WebInspector.TextRange} to
+     */
+    onJumpToPosition: function(from, to)
+    {
+        this.dispatchEventToListeners(WebInspector.SourceFrame.Events.JumpHappened, {
+            from: from,
+            to: to
+        });
+    },
+
     inheritScrollPositions: function(sourceFrame)
     {
         this._textEditor.inheritScrollPositions(sourceFrame._textEditor);
@@ -727,14 +767,7 @@ WebInspector.SourceFrame.prototype = {
     },
 
     /**
-     * @param {string} text
-     */
-    commitEditing: function(text)
-    {
-    },
-
-    /**
-     * @param {WebInspector.TextRange} textRange
+     * @param {!WebInspector.TextRange} textRange
      */
     selectionChanged: function(textRange)
     {
@@ -744,7 +777,7 @@ WebInspector.SourceFrame.prototype = {
     },
 
     /**
-     * @param {WebInspector.TextRange} textRange
+     * @param {!WebInspector.TextRange} textRange
      */
     _updateSourcePosition: function(textRange)
     {
@@ -780,16 +813,6 @@ WebInspector.SourceFrame.prototype = {
             e.consume(true);
     },
 
-    _commitEditing: function()
-    {
-        if (this._textEditor.readOnly())
-            return false;
-
-        var content = this._textEditor.text();
-        this.commitEditing(content);
-        return true;
-    },
-
     __proto__: WebInspector.View.prototype
 }
 
@@ -810,7 +833,7 @@ WebInspector.TextEditorDelegateForSourceFrame.prototype = {
     },
 
     /**
-     * @param {WebInspector.TextRange} textRange
+     * @param {!WebInspector.TextRange} textRange
      */
     selectionChanged: function(textRange)
     {
@@ -843,7 +866,7 @@ WebInspector.TextEditorDelegateForSourceFrame.prototype = {
     /**
      * @param {string} hrefValue
      * @param {boolean} isExternal
-     * @return {Element}
+     * @return {!Element}
      */
     createLink: function(hrefValue, isExternal)
     {
@@ -851,5 +874,12 @@ WebInspector.TextEditorDelegateForSourceFrame.prototype = {
         return WebInspector.linkifyURLAsNode(targetLocation || hrefValue, hrefValue, undefined, isExternal);
     },
 
-    __proto__: WebInspector.TextEditorDelegate.prototype
+    /**
+     * @param {?WebInspector.TextRange} from
+     * @param {?WebInspector.TextRange} to
+     */
+    onJumpToPosition: function(from, to)
+    {
+        this._sourceFrame.onJumpToPosition(from, to);
+    }
 }

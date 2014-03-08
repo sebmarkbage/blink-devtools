@@ -50,6 +50,9 @@ WebInspector.SidebarPane.EventTypes = {
 }
 
 WebInspector.SidebarPane.prototype = {
+    /**
+     * @return {string}
+     */
     title: function()
     {
         return this._title;
@@ -100,8 +103,8 @@ WebInspector.SidebarPane.prototype = {
 
 /**
  * @constructor
- * @param {Element} container
- * @param {WebInspector.SidebarPane} pane
+ * @param {!Element} container
+ * @param {!WebInspector.SidebarPane} pane
  */
 WebInspector.SidebarPaneTitle = function(container, pane)
 {
@@ -121,27 +124,27 @@ WebInspector.SidebarPaneTitle.prototype = {
 
     _expand: function()
     {
-        this.element.addStyleClass("expanded");
+        this.element.classList.add("expanded");
         this._pane.show(this.element.parentNode, this.element.nextSibling);
     },
 
     _collapse: function()
     {
-        this.element.removeStyleClass("expanded");
+        this.element.classList.remove("expanded");
         if (this._pane.element.parentNode == this.element.parentNode)
             this._pane.detach();
     },
 
     _toggleExpanded: function()
     {
-        if (this.element.hasStyleClass("expanded"))
+        if (this.element.classList.contains("expanded"))
             this._collapse();
         else
             this._pane.expand();
     },
 
     /**
-     * @param {Event} event
+     * @param {!Event} event
      */
     _onTitleKeyDown: function(event)
     {
@@ -157,13 +160,13 @@ WebInspector.SidebarPaneTitle.prototype = {
 WebInspector.SidebarPaneStack = function()
 {
     WebInspector.View.call(this);
-    this.element.className = "sidebar-pane-stack fill";
+    this.element.className = "sidebar-pane-stack";
     this.registerRequiredCSS("sidebarPane.css");
 }
 
 WebInspector.SidebarPaneStack.prototype = {
     /**
-     * @param {WebInspector.SidebarPane} pane
+     * @param {!WebInspector.SidebarPane} pane
      */
     addPane: function(pane)
     {
@@ -180,14 +183,14 @@ WebInspector.SidebarPaneStack.prototype = {
 WebInspector.SidebarTabbedPane = function()
 {
     WebInspector.TabbedPane.call(this);
-    this.setRetainTabsOrder(true);
-    this.element.addStyleClass("sidebar-tabbed-pane");
+    this.setRetainTabOrder(true);
+    this.element.classList.add("sidebar-tabbed-pane");
     this.registerRequiredCSS("sidebarPane.css");
 }
 
 WebInspector.SidebarTabbedPane.prototype = {
     /**
-     * @param {WebInspector.SidebarPane} pane
+     * @param {!WebInspector.SidebarPane} pane
      */
     addPane: function(pane)
     {

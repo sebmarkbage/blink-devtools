@@ -42,14 +42,13 @@ WebInspector.SettingsScreen = function(onHide)
     this._onHide = onHide;
 
     this._tabbedPane = new WebInspector.TabbedPane();
-    this._tabbedPane.element.addStyleClass("help-window-main");
+    this._tabbedPane.element.classList.add("help-window-main");
     var settingsLabelElement = document.createElement("div");
     settingsLabelElement.className = "help-window-label";
     settingsLabelElement.createTextChild(WebInspector.UIString("Settings"));
     this._tabbedPane.element.insertBefore(settingsLabelElement, this._tabbedPane.element.firstChild);
     this._tabbedPane.element.appendChild(this._createCloseButton());
     this._tabbedPane.appendTab(WebInspector.SettingsScreen.Tabs.General, WebInspector.UIString("General"), new WebInspector.GenericSettingsTab());
-    this._tabbedPane.appendTab(WebInspector.SettingsScreen.Tabs.Overrides,WebInspector.UIString("Overrides"),new WebInspector.OverridesSettingsTab());
     this._tabbedPane.appendTab(WebInspector.SettingsScreen.Tabs.Workspace, WebInspector.UIString("Workspace"), new WebInspector.WorkspaceSettingsTab());
     if (WebInspector.experimentsSettings.experimentsEnabled)
         this._tabbedPane.appendTab(WebInspector.SettingsScreen.Tabs.Experiments, WebInspector.UIString("Experiments"), new WebInspector.ExperimentsSettingsTab());
@@ -73,7 +72,7 @@ WebInspector.SettingsScreen.regexValidator = function(text)
         regex = new RegExp(text);
     } catch (e) {
     }
-    return regex ? null : "Invalid pattern";
+    return regex ? null : WebInspector.UIString("Invalid pattern");
 }
 
 /**
@@ -84,11 +83,11 @@ WebInspector.SettingsScreen.regexValidator = function(text)
  */
 WebInspector.SettingsScreen.integerValidator = function(min, max, text)
 {
-    var value = parseInt(text, 10);
+    var value = Number(text);
     if (isNaN(value))
-        return "Invalid number format";
+        return WebInspector.UIString("Invalid number format");
     if (value < min || value > max)
-        return "Value is out of range [" + min + ", " + max + "]";
+        return WebInspector.UIString("Value is out of range [%d, %d]", min, max);
     return null;
 }
 
@@ -110,7 +109,7 @@ WebInspector.SettingsScreen.prototype = {
     },
 
     /**
-     * @param {WebInspector.Event} event
+     * @param {!WebInspector.Event} event
      */
     _tabSelected: function(event)
     {
@@ -128,6 +127,7 @@ WebInspector.SettingsScreen.prototype = {
 
     /**
      * @override
+     * @return {boolean}
      */
     isClosingKey: function(keyCode)
     {
@@ -158,78 +158,12 @@ WebInspector.SettingsScreen.prototype = {
 WebInspector.SettingsTab = function(name, id)
 {
     WebInspector.View.call(this);
-    this.element.className = "settings-tab-container";
+    this.element.classList.add("settings-tab-container");
     if (id)
         this.element.id = id;
     var header = this.element.createChild("header");
     header.createChild("h3").appendChild(document.createTextNode(name));
     this.containerElement = this.element.createChild("div", "help-container-wrapper").createChild("div", "settings-tab help-content help-container");
-}
-
-/**
- * @param {string} name
- * @param {function(): *} getter
- * @param {function(*)} setter
- * @param {boolean=} omitParagraphElement
- * @param {Element=} inputElement
- * @param {string=} tooltip
- * @return {Element}
- */
-WebInspector.SettingsTab.createCheckbox = function(name, getter, setter, omitParagraphElement, inputElement, tooltip)
-{
-    var input = inputElement || document.createElement("input");
-    input.type = "checkbox";
-    input.name = name;
-    input.checked = getter();
-
-    function listener()
-    {
-        setter(input.checked);
-    }
-    input.addEventListener("click", listener, false);
-
-    var label = document.createElement("label");
-    label.appendChild(input);
-    label.appendChild(document.createTextNode(name));
-    if (tooltip)
-        label.title = tooltip;
-
-    if (omitParagraphElement)
-        return label;
-
-    var p = document.createElement("p");
-    p.appendChild(label);
-    return p;
-}
-
-/**
- * @param {string} name
- * @param {WebInspector.Setting} setting
- * @param {boolean=} omitParagraphElement
- * @param {Element=} inputElement
- * @param {string=} tooltip
- * @return {Element}
- */
-WebInspector.SettingsTab.createSettingCheckbox = function(name, setting, omitParagraphElement, inputElement, tooltip)
-{
-    return WebInspector.SettingsTab.createCheckbox(name, setting.get.bind(setting), setting.set.bind(setting), omitParagraphElement, inputElement, tooltip);
-}
-
-/**
- * @param {WebInspector.Setting} setting
- * @return {Element}
- */
-WebInspector.SettingsTab.createSettingFieldset = function(setting)
-{
-    var fieldset = document.createElement("fieldset");
-    fieldset.disabled = !setting.get();
-    setting.addChangeListener(settingChanged);
-    return fieldset;
-
-    function settingChanged()
-    {
-        fieldset.disabled = !setting.get();
-    }
 }
 
 WebInspector.SettingsTab.prototype = {
@@ -273,7 +207,7 @@ WebInspector.SettingsTab.prototype = {
 
     /**
      * @param {string} label
-     * @param {WebInspector.Setting} setting
+     * @param {!WebInspector.Setting} setting
      * @param {boolean} numeric
      * @param {number=} maxLength
      * @param {string=} width
@@ -295,7 +229,7 @@ WebInspector.SettingsTab.prototype = {
             inputElement.style.width = width;
         if (validatorCallback) {
             var errorMessageLabel = p.createChild("div");
-            errorMessageLabel.addStyleClass("field-error-message");
+            errorMessageLabel.classList.add("field-error-message");
             errorMessageLabel.style.color = "DarkRed";
             inputElement.oninput = function()
             {
@@ -337,15 +271,27 @@ WebInspector.GenericSettingsTab = function()
     WebInspector.SettingsTab.call(this, WebInspector.UIString("General"), "general-tab-content");
 
     var p = this._appendSection();
-    p.appendChild(WebInspector.SettingsTab.createSettingCheckbox(WebInspector.UIString("Disable cache (while DevTools is open)"), WebInspector.settings.cacheDisabled));
-    var disableJSElement = WebInspector.SettingsTab.createSettingCheckbox(WebInspector.UIString("Disable JavaScript"), WebInspector.settings.javaScriptDisabled);
+    p.appendChild(WebInspector.SettingsUI.createSettingCheckbox(WebInspector.UIString("Disable cache (while DevTools is open)"), WebInspector.settings.cacheDisabled));
+    var disableJSElement = WebInspector.SettingsUI.createSettingCheckbox(WebInspector.UIString("Disable JavaScript"), WebInspector.settings.javaScriptDisabled);
     p.appendChild(disableJSElement);
     WebInspector.settings.javaScriptDisabled.addChangeListener(this._javaScriptDisabledChanged, this);
     this._disableJSCheckbox = disableJSElement.getElementsByTagName("input")[0];
+    var disableJSInfoParent = this._disableJSCheckbox.parentElement.createChild("span", "monospace");
+    this._disableJSInfo = disableJSInfoParent.createChild("span", "object-info-state-note hidden");
+    this._disableJSInfo.title = WebInspector.UIString("JavaScript is blocked on the inspected page (may be disabled in browser settings).");
+
+    WebInspector.resourceTreeModel.addEventListener(WebInspector.ResourceTreeModel.EventTypes.MainFrameNavigated, this._updateScriptDisabledCheckbox, this);
     this._updateScriptDisabledCheckbox();
 
     p = this._appendSection(WebInspector.UIString("Appearance"));
-    p.appendChild(WebInspector.SettingsTab.createSettingCheckbox(WebInspector.UIString("Split panels vertically when docked to right"), WebInspector.settings.splitVerticallyWhenDockedToRight));
+    p.appendChild(WebInspector.SettingsUI.createSettingCheckbox(WebInspector.UIString("Show 'Emulation' view in console drawer."), WebInspector.settings.showEmulationViewInDrawer));
+    this._appendDrawerNote(p.lastElementChild);
+    p.appendChild(WebInspector.SettingsUI.createSettingCheckbox(WebInspector.UIString("Show 'Rendering' view in console drawer."), WebInspector.settings.showRenderingViewInDrawer));
+    this._appendDrawerNote(p.lastElementChild);
+    var splitVerticallyTitle = WebInspector.UIString("Split panels vertically when docked to %s", WebInspector.experimentsSettings.dockToLeft.isEnabled() ? "left or right" : "right");
+    p.appendChild(WebInspector.SettingsUI.createSettingCheckbox(splitVerticallyTitle, WebInspector.settings.splitVerticallyWhenDockedToRight));
+    var panelShortcutTitle = WebInspector.UIString("Enable %s + 1-9 shortcut to switch panels", WebInspector.isMac() ? "Cmd" : "Ctrl");
+    p.appendChild(WebInspector.SettingsUI.createSettingCheckbox(panelShortcutTitle, WebInspector.settings.shortcutPanelSwitch));
 
     p = this._appendSection(WebInspector.UIString("Elements"));
     var colorFormatElement = this._createSelectSetting(WebInspector.UIString("Color format"), [
@@ -355,40 +301,20 @@ WebInspector.GenericSettingsTab = function()
             [ "HSL: hsl(300, 80%, 90%)", WebInspector.Color.Format.HSL ]
         ], WebInspector.settings.colorFormat);
     p.appendChild(colorFormatElement);
-    p.appendChild(WebInspector.SettingsTab.createSettingCheckbox(WebInspector.UIString("Show user agent styles"), WebInspector.settings.showUserAgentStyles));
-    p.appendChild(WebInspector.SettingsTab.createSettingCheckbox(WebInspector.UIString("Word wrap"), WebInspector.settings.domWordWrap));
-    p.appendChild(WebInspector.SettingsTab.createSettingCheckbox(WebInspector.UIString("Show Shadow DOM"), WebInspector.settings.showShadowDOM));
-    p.appendChild(WebInspector.SettingsTab.createSettingCheckbox(WebInspector.UIString("Show rulers"), WebInspector.settings.showMetricsRulers));
-
-    p = this._appendSection(WebInspector.UIString("Rendering"));
-    p.appendChild(WebInspector.SettingsTab.createSettingCheckbox(WebInspector.UIString("Show paint rectangles"), WebInspector.settings.showPaintRects));
-    this._forceCompositingModeCheckbox = document.createElement("input");
-
-    var checkbox = WebInspector.SettingsTab.createSettingCheckbox(WebInspector.UIString("Force accelerated compositing"), WebInspector.settings.forceCompositingMode, false, this._forceCompositingModeCheckbox);
-    p.appendChild(checkbox);
-    WebInspector.settings.forceCompositingMode.addChangeListener(this._forceCompositingModeChanged, this);
-    var fieldset = WebInspector.SettingsTab.createSettingFieldset(WebInspector.settings.forceCompositingMode);
-    this._showCompositedLayersBordersCheckbox = document.createElement("input");
-    fieldset.appendChild(WebInspector.SettingsTab.createSettingCheckbox(WebInspector.UIString("Show composited layer borders"), WebInspector.settings.showDebugBorders, false, this._showCompositedLayersBordersCheckbox));
-    this._showFPSCheckbox = document.createElement("input");
-    fieldset.appendChild(WebInspector.SettingsTab.createSettingCheckbox(WebInspector.UIString("Show FPS meter"), WebInspector.settings.showFPSCounter, false, this._showFPSCheckbox));
-    this._continousPaintingCheckbox = document.createElement("input");
-    fieldset.appendChild(WebInspector.SettingsTab.createSettingCheckbox(WebInspector.UIString("Enable continuous page repainting"), WebInspector.settings.continuousPainting, false, this._continousPaintingCheckbox));
-    this._showScrollBottleneckRectsCheckbox = document.createElement("input");
-    var tooltip = WebInspector.UIString("Shows areas of the page that slow down scrolling:\nTouch and mousewheel event listeners can delay scrolling.\nSome areas need to repaint their content when scrolled.");
-    fieldset.appendChild(WebInspector.SettingsTab.createSettingCheckbox(WebInspector.UIString("Show potential scroll bottlenecks"), WebInspector.settings.showScrollBottleneckRects, false, this._showScrollBottleneckRectsCheckbox, tooltip));
-    checkbox.appendChild(fieldset);
-    this._forceCompositingModeChanged();
+    p.appendChild(WebInspector.SettingsUI.createSettingCheckbox(WebInspector.UIString("Show user agent styles"), WebInspector.settings.showUserAgentStyles));
+    p.appendChild(WebInspector.SettingsUI.createSettingCheckbox(WebInspector.UIString("Word wrap"), WebInspector.settings.domWordWrap));
+    p.appendChild(WebInspector.SettingsUI.createSettingCheckbox(WebInspector.UIString("Show Shadow DOM"), WebInspector.settings.showShadowDOM));
+    p.appendChild(WebInspector.SettingsUI.createSettingCheckbox(WebInspector.UIString("Show rulers"), WebInspector.settings.showMetricsRulers));
 
     p = this._appendSection(WebInspector.UIString("Sources"));
-    p.appendChild(WebInspector.SettingsTab.createSettingCheckbox(WebInspector.UIString("Search in content scripts"), WebInspector.settings.searchInContentScripts));
-    p.appendChild(WebInspector.SettingsTab.createSettingCheckbox(WebInspector.UIString("Enable JS source maps"), WebInspector.settings.jsSourceMapsEnabled));
+    p.appendChild(WebInspector.SettingsUI.createSettingCheckbox(WebInspector.UIString("Search in content scripts"), WebInspector.settings.searchInContentScripts));
+    p.appendChild(WebInspector.SettingsUI.createSettingCheckbox(WebInspector.UIString("Enable JavaScript source maps"), WebInspector.settings.jsSourceMapsEnabled));
 
-    checkbox = WebInspector.SettingsTab.createSettingCheckbox(WebInspector.UIString("Enable CSS source maps"), WebInspector.settings.cssSourceMapsEnabled);
+    var checkbox = WebInspector.SettingsUI.createSettingCheckbox(WebInspector.UIString("Enable CSS source maps"), WebInspector.settings.cssSourceMapsEnabled);
     p.appendChild(checkbox);
-    fieldset = WebInspector.SettingsTab.createSettingFieldset(WebInspector.settings.cssSourceMapsEnabled);
+    var fieldset = WebInspector.SettingsUI.createSettingFieldset(WebInspector.settings.cssSourceMapsEnabled);
     var autoReloadCSSCheckbox = fieldset.createChild("input");
-    fieldset.appendChild(WebInspector.SettingsTab.createSettingCheckbox(WebInspector.UIString("Auto-reload generated CSS"), WebInspector.settings.cssReloadEnabled, false, autoReloadCSSCheckbox));
+    fieldset.appendChild(WebInspector.SettingsUI.createSettingCheckbox(WebInspector.UIString("Auto-reload generated CSS"), WebInspector.settings.cssReloadEnabled, false, autoReloadCSSCheckbox));
     checkbox.appendChild(fieldset);
 
     var indentationElement = this._createSelectSetting(WebInspector.UIString("Default indentation"), [
@@ -398,13 +324,13 @@ WebInspector.GenericSettingsTab = function()
             [ WebInspector.UIString("Tab character"), WebInspector.TextUtils.Indent.TabCharacter ]
         ], WebInspector.settings.textEditorIndent);
     p.appendChild(indentationElement);
-    p.appendChild(WebInspector.SettingsTab.createSettingCheckbox(WebInspector.UIString("Detect indentation"), WebInspector.settings.textEditorAutoDetectIndent));
-    p.appendChild(WebInspector.SettingsTab.createSettingCheckbox(WebInspector.UIString("Autocompletion"), WebInspector.settings.textEditorAutocompletion));
-    p.appendChild(WebInspector.SettingsTab.createSettingCheckbox(WebInspector.UIString("Bracket matching"), WebInspector.settings.textEditorBracketMatching));
-    p.appendChild(WebInspector.SettingsTab.createSettingCheckbox(WebInspector.UIString("Show whitespace characters"), WebInspector.settings.showWhitespacesInEditor));
+    p.appendChild(WebInspector.SettingsUI.createSettingCheckbox(WebInspector.UIString("Detect indentation"), WebInspector.settings.textEditorAutoDetectIndent));
+    p.appendChild(WebInspector.SettingsUI.createSettingCheckbox(WebInspector.UIString("Autocompletion"), WebInspector.settings.textEditorAutocompletion));
+    p.appendChild(WebInspector.SettingsUI.createSettingCheckbox(WebInspector.UIString("Bracket matching"), WebInspector.settings.textEditorBracketMatching));
+    p.appendChild(WebInspector.SettingsUI.createSettingCheckbox(WebInspector.UIString("Show whitespace characters"), WebInspector.settings.showWhitespacesInEditor));
     if (WebInspector.experimentsSettings.frameworksDebuggingSupport.isEnabled()) {
-        checkbox = WebInspector.SettingsTab.createSettingCheckbox(WebInspector.UIString("Skip stepping through sources with particular names"), WebInspector.settings.skipStackFramesSwitch);
-        fieldset = WebInspector.SettingsTab.createSettingFieldset(WebInspector.settings.skipStackFramesSwitch);
+        checkbox = WebInspector.SettingsUI.createSettingCheckbox(WebInspector.UIString("Skip stepping through sources with particular names"), WebInspector.settings.skipStackFramesSwitch);
+        fieldset = WebInspector.SettingsUI.createSettingFieldset(WebInspector.settings.skipStackFramesSwitch);
         fieldset.appendChild(this._createInputSetting(WebInspector.UIString("Pattern"), WebInspector.settings.skipStackFramesPattern, false, 1000, "100px", WebInspector.SettingsScreen.regexValidator));
         checkbox.appendChild(fieldset);
         p.appendChild(checkbox);
@@ -413,72 +339,53 @@ WebInspector.GenericSettingsTab = function()
     WebInspector.settings.skipStackFramesPattern.addChangeListener(this._skipStackFramesSwitchOrPatternChanged, this);
 
     p = this._appendSection(WebInspector.UIString("Profiler"));
-    p.appendChild(WebInspector.SettingsTab.createSettingCheckbox(WebInspector.UIString("Show advanced heap snapshot properties"), WebInspector.settings.showAdvancedHeapSnapshotProperties));
-    p.appendChild(WebInspector.SettingsTab.createSettingCheckbox(WebInspector.UIString("High resolution CPU profiling"), WebInspector.settings.highResolutionCpuProfiling));
-
-    p = this._appendSection(WebInspector.UIString("Timeline"));
-    checkbox = WebInspector.SettingsTab.createSettingCheckbox(WebInspector.UIString("Limit number of captured JS stack frames"), WebInspector.settings.timelineLimitStackFramesFlag);
-    p.appendChild(checkbox);
-
-    fieldset = WebInspector.SettingsTab.createSettingFieldset(WebInspector.settings.timelineLimitStackFramesFlag);
-    var frameCountValidator = WebInspector.SettingsScreen.integerValidator.bind(this, 0, 99);
-    fieldset.appendChild(this._createInputSetting(WebInspector.UIString("Frames to capture"), WebInspector.settings.timelineStackFramesToCapture, true, 2, "2em", frameCountValidator));
-    checkbox.appendChild(fieldset);
+    p.appendChild(WebInspector.SettingsUI.createSettingCheckbox(WebInspector.UIString("Show advanced heap snapshot properties"), WebInspector.settings.showAdvancedHeapSnapshotProperties));
+    p.appendChild(WebInspector.SettingsUI.createSettingCheckbox(WebInspector.UIString("High resolution CPU profiling"), WebInspector.settings.highResolutionCpuProfiling));
 
     p = this._appendSection(WebInspector.UIString("Console"));
-    p.appendChild(WebInspector.SettingsTab.createSettingCheckbox(WebInspector.UIString("Log XMLHttpRequests"), WebInspector.settings.monitoringXHREnabled));
-    p.appendChild(WebInspector.SettingsTab.createSettingCheckbox(WebInspector.UIString("Preserve log upon navigation"), WebInspector.settings.preserveConsoleLog));
+    p.appendChild(WebInspector.SettingsUI.createSettingCheckbox(WebInspector.UIString("Log XMLHttpRequests"), WebInspector.settings.monitoringXHREnabled));
+    p.appendChild(WebInspector.SettingsUI.createSettingCheckbox(WebInspector.UIString("Preserve log upon navigation"), WebInspector.settings.preserveConsoleLog));
 
-    if (WebInspector.extensionServer.hasExtensions()) {
+    if (WebInspector.openAnchorLocationRegistry.handlerNames.length > 0) {
         var handlerSelector = new WebInspector.HandlerSelector(WebInspector.openAnchorLocationRegistry);
         p = this._appendSection(WebInspector.UIString("Extensions"));
         p.appendChild(this._createCustomSetting(WebInspector.UIString("Open links in"), handlerSelector.element));
     }
 
     p = this._appendSection();
-    var panelShortcutTitle = WebInspector.UIString("Enable %s + 1-9 shortcut to switch panels", WebInspector.isMac() ? "Cmd" : "Ctrl");
-    p.appendChild(WebInspector.SettingsTab.createSettingCheckbox(panelShortcutTitle, WebInspector.settings.shortcutPanelSwitch));
+
+    var restoreDefaults = p.createChild("input", "settings-tab-text-button");
+    restoreDefaults.type = "button";
+    restoreDefaults.value = WebInspector.UIString("Restore defaults and reload");
+    restoreDefaults.addEventListener("click", restoreAndReload);
+
+    function restoreAndReload()
+    {
+        if (window.localStorage)
+            window.localStorage.clear();
+        WebInspector.reload();
+    }
 }
 
 WebInspector.GenericSettingsTab.prototype = {
-    /**
-     * @param {WebInspector.Event=} event
-     */
-    _forceCompositingModeChanged: function(event)
-    {
-        var compositing = event ? !!event.data : WebInspector.settings.forceCompositingMode.get();
-        if (!compositing) {
-            this._showFPSCheckbox.checked = false;
-            this._continousPaintingCheckbox.checked = false;
-            this._showCompositedLayersBordersCheckbox.checked = false;
-            this._showScrollBottleneckRectsCheckbox.checked = false;
-            WebInspector.settings.showFPSCounter.set(false);
-            WebInspector.settings.continuousPainting.set(false);
-            WebInspector.settings.showDebugBorders.set(false);
-            WebInspector.settings.showScrollBottleneckRects.set(false);
-        }
-        this._forceCompositingModeCheckbox.checked = compositing;
-    },
-
     _updateScriptDisabledCheckbox: function()
     {
+        /**
+         * @param {?Protocol.Error} error
+         * @param {string} status
+         * @this {WebInspector.GenericSettingsTab}
+         */
         function executionStatusCallback(error, status)
         {
             if (error || !status)
                 return;
 
-            switch (status) {
-            case "forbidden":
-                this._disableJSCheckbox.checked = true;
-                this._disableJSCheckbox.disabled = true;
-                break;
-            case "disabled":
-                this._disableJSCheckbox.checked = true;
-                break;
-            default:
-                this._disableJSCheckbox.checked = false;
-                break;
-            }
+            var forbidden = (status === "forbidden");
+            var disabled = forbidden || (status === "disabled");
+
+            this._disableJSInfo.classList.toggle("hidden", !forbidden);
+            this._disableJSCheckbox.checked = disabled;
+            this._disableJSCheckbox.disabled = forbidden;
         }
 
         PageAgent.getScriptExecutionStatus(executionStatusCallback.bind(this));
@@ -493,6 +400,19 @@ WebInspector.GenericSettingsTab.prototype = {
     _skipStackFramesSwitchOrPatternChanged: function()
     {
         WebInspector.DebuggerModel.applySkipStackFrameSettings();
+    },
+
+    /**
+     * @param {?Element} p
+     */
+    _appendDrawerNote: function(p)
+    {
+        var noteElement = p.createChild("div", "help-field-note");
+        noteElement.createTextChild("Hit ");
+        noteElement.createChild("span", "help-key").textContent = "Esc";
+        noteElement.createTextChild(WebInspector.UIString(" or click the"));
+        noteElement.appendChild(new WebInspector.StatusBarButton(WebInspector.UIString("Drawer"), "console-status-bar-item").element);
+        noteElement.createTextChild(WebInspector.UIString("toolbar item"));
     },
 
     __proto__: WebInspector.SettingsTab.prototype
@@ -530,28 +450,6 @@ WebInspector.WorkspaceSettingsTab = function()
     this._reset();
 }
 
-/**
- * @constructor
- * @extends {WebInspector.SettingsTab}
- */
-WebInspector.OverridesSettingsTab = function()
-{
-    WebInspector.SettingsTab.call(this, WebInspector.UIString("Overrides"), "overrides-tab-content");
-
-    var labelElement = WebInspector.SettingsTab.createSettingCheckbox("", WebInspector.settings.showEmulationViewInDrawer, true /*omitParagraphElement*/);
-    labelElement.createTextChild(WebInspector.UIString("Show 'Emulation' view in console drawer. (Hit "));
-    labelElement.createChild("span", "help-key").textContent = "Esc";
-    labelElement.createTextChild(WebInspector.UIString(" or click the"));
-    labelElement.appendChild(new WebInspector.StatusBarButton(WebInspector.UIString("Drawer"), "console-status-bar-item").element);
-    labelElement.createTextChild(WebInspector.UIString("toolbar icon)"));
-
-    this.containerElement.appendChild(labelElement);
-}
-
-WebInspector.OverridesSettingsTab.prototype = {
-    __proto__: WebInspector.SettingsTab.prototype
-}
-
 WebInspector.WorkspaceSettingsTab.prototype = {
     wasShown: function()
     {
@@ -577,7 +475,7 @@ WebInspector.WorkspaceSettingsTab.prototype = {
         }
 
         this._fileSystemsList = new WebInspector.SettingsList(["path"], this._renderFileSystem.bind(this));
-        this._fileSystemsList.element.addStyleClass("file-systems-list");
+        this._fileSystemsList.element.classList.add("file-systems-list");
         this._fileSystemsList.addEventListener(WebInspector.SettingsList.Events.Selected, this._fileSystemSelected.bind(this));
         this._fileSystemsList.addEventListener(WebInspector.SettingsList.Events.Removed, this._fileSystemRemovedfromList.bind(this));
         this._fileSystemsList.addEventListener(WebInspector.SettingsList.Events.DoubleClicked, this._fileSystemDoubleClicked.bind(this));
@@ -593,7 +491,7 @@ WebInspector.WorkspaceSettingsTab.prototype = {
     },
 
     /**
-     * @param {WebInspector.Event} event
+     * @param {!WebInspector.Event} event
      */
     _fileSystemSelected: function(event)
     {
@@ -601,7 +499,7 @@ WebInspector.WorkspaceSettingsTab.prototype = {
     },
 
     /**
-     * @param {WebInspector.Event} event
+     * @param {!WebInspector.Event} event
      */
     _fileSystemDoubleClicked: function(event)
     {
@@ -610,7 +508,7 @@ WebInspector.WorkspaceSettingsTab.prototype = {
     },
 
     /**
-     * @param {WebInspector.Event=} event
+     * @param {!WebInspector.Event=} event
      */
     _editFileSystemClicked: function(event)
     {
@@ -622,18 +520,18 @@ WebInspector.WorkspaceSettingsTab.prototype = {
      */
     _editFileSystem: function(id)
     {
-        WebInspector.EditFileSystemDialog.show(document.body, id);
+        WebInspector.EditFileSystemDialog.show(WebInspector.inspectorView.element, id);
     },
 
     /**
-     * @param {function(Event)} handler
-     * @return {Element}
+     * @param {function(?Event)} handler
+     * @return {!Element}
      */
     _createRemoveButton: function(handler)
     {
         var removeButton = document.createElement("button");
-        removeButton.addStyleClass("button");
-        removeButton.addStyleClass("remove-item-button");
+        removeButton.classList.add("button");
+        removeButton.classList.add("remove-item-button");
         removeButton.value = WebInspector.UIString("Remove");
         if (handler)
             removeButton.addEventListener("click", handler, false);
@@ -643,7 +541,7 @@ WebInspector.WorkspaceSettingsTab.prototype = {
     },
 
     /**
-     * @param {Element} columnElement
+     * @param {!Element} columnElement
      * @param {string} column
      * @param {?string} id
      */
@@ -673,7 +571,7 @@ WebInspector.WorkspaceSettingsTab.prototype = {
     },
 
     /**
-     * @param {WebInspector.Event} event
+     * @param {!WebInspector.Event} event
      */
     _fileSystemRemovedfromList: function(event)
     {
@@ -690,7 +588,7 @@ WebInspector.WorkspaceSettingsTab.prototype = {
 
     _fileSystemAdded: function(event)
     {
-        var fileSystem = /** @type {WebInspector.IsolatedFileSystem} */ (event.data);
+        var fileSystem = /** @type {!WebInspector.IsolatedFileSystem} */ (event.data);
         if (!this._fileSystemsList)
             this._reset();
         else
@@ -699,7 +597,7 @@ WebInspector.WorkspaceSettingsTab.prototype = {
 
     _fileSystemRemoved: function(event)
     {
-        var fileSystem = /** @type {WebInspector.IsolatedFileSystem} */ (event.data);
+        var fileSystem = /** @type {!WebInspector.IsolatedFileSystem} */ (event.data);
         var selectedFileSystemPath = this._selectedFileSystemPath();
         if (this._fileSystemsList.itemForId(fileSystem.path()))
             this._fileSystemsList.removeItem(fileSystem.path());
@@ -736,7 +634,7 @@ WebInspector.ExperimentsSettingsTab = function()
 
 WebInspector.ExperimentsSettingsTab.prototype = {
     /**
-     * @return {Element} element
+     * @return {!Element} element
      */
     _createExperimentsWarningSubsection: function()
     {
@@ -786,15 +684,15 @@ WebInspector.SettingsController = function()
 
 WebInspector.SettingsController.prototype =
 {
+    /**
+     * @return {!Element}
+     */
     get statusBarItem()
     {
         return this._statusBarButton.element;
     },
 
-    /**
-     * @param {Event} event
-     */
-    _mouseUp: function(event)
+    _mouseUp: function()
     {
         this.showSettingsScreen();
     },
@@ -819,12 +717,6 @@ WebInspector.SettingsController.prototype =
         this._settingsScreenVisible = true;
     },
 
-    _hideSettingsScreen: function()
-    {
-        if (this._settingsScreen)
-            this._settingsScreen.hide();
-    },
-
     resize: function()
     {
         if (this._settingsScreen && this._settingsScreen.isShowing())
@@ -835,12 +727,12 @@ WebInspector.SettingsController.prototype =
 /**
  * @constructor
  * @extends {WebInspector.Object}
- * @param {function(Element, string, ?string)} itemRenderer
+ * @param {function(!Element, string, ?string)} itemRenderer
  */
 WebInspector.SettingsList = function(columns, itemRenderer)
 {
     this.element = document.createElement("div");
-    this.element.addStyleClass("settings-list");
+    this.element.classList.add("settings-list");
     this.element.tabIndex = -1;
     this._itemRenderer = itemRenderer;
     this._listItems = {};
@@ -858,13 +750,13 @@ WebInspector.SettingsList.prototype = {
     /**
      * @param {?string} itemId
      * @param {?string=} beforeId
-     * @return {Element}
+     * @return {!Element}
      */
     addItem: function(itemId, beforeId)
     {
         var listItem = document.createElement("div");
         listItem._id = itemId;
-        listItem.addStyleClass("settings-list-item");
+        listItem.classList.add("settings-list-item");
         if (typeof beforeId !== undefined)
             this.element.insertBefore(listItem, this._listItems[beforeId]);
         else
@@ -891,6 +783,10 @@ WebInspector.SettingsList.prototype = {
         else
             this._ids.push(itemId);
 
+        /**
+         * @param {?Event} event
+         * @this {WebInspector.SettingsList}
+         */
         function removeItemClicked(event)
         {
             removeItemButton.disabled = true;
@@ -918,7 +814,7 @@ WebInspector.SettingsList.prototype = {
     },
 
     /**
-     * @return {Array.<?string>}
+     * @return {!Array.<?string>}
      */
     itemIds: function()
     {
@@ -926,7 +822,7 @@ WebInspector.SettingsList.prototype = {
     },
 
     /**
-     * @return {Array.<string>}
+     * @return {!Array.<string>}
      */
     columns: function()
     {
@@ -942,7 +838,7 @@ WebInspector.SettingsList.prototype = {
     },
 
     /**
-     * @return {Element}
+     * @return {!Element}
      */
     selectedItem: function()
     {
@@ -951,7 +847,7 @@ WebInspector.SettingsList.prototype = {
 
     /**
      * @param {string} itemId
-     * @return {Element}
+     * @return {!Element}
      */
     itemForId: function(itemId)
     {
@@ -960,7 +856,7 @@ WebInspector.SettingsList.prototype = {
 
     /**
      * @param {?string} id
-     * @param {Event=} event
+     * @param {!Event=} event
      */
     _onDoubleClick: function(id, event)
     {
@@ -969,17 +865,17 @@ WebInspector.SettingsList.prototype = {
 
     /**
      * @param {?string} id
-     * @param {Event=} event
+     * @param {!Event=} event
      */
     selectItem: function(id, event)
     {
         if (typeof this._selectedId !== "undefined") {
-            this._listItems[this._selectedId].removeStyleClass("selected");
+            this._listItems[this._selectedId].classList.remove("selected");
         }
 
         this._selectedId = id;
         if (typeof this._selectedId !== "undefined") {
-            this._listItems[this._selectedId].addStyleClass("selected");
+            this._listItems[this._selectedId].classList.add("selected");
         }
         this.dispatchEventToListeners(WebInspector.SettingsList.Events.Selected, id);
         if (event)
@@ -987,13 +883,13 @@ WebInspector.SettingsList.prototype = {
     },
 
     /**
-     * @param {function(Event)} handler
-     * @return {Element}
+     * @param {function(?Event)} handler
+     * @return {!Element}
      */
     _createRemoveButton: function(handler)
     {
         var removeButton = document.createElement("button");
-        removeButton.addStyleClass("remove-item-button");
+        removeButton.classList.add("remove-item-button");
         removeButton.value = WebInspector.UIString("Remove");
         removeButton.addEventListener("click", handler, false);
         return removeButton;
@@ -1005,8 +901,8 @@ WebInspector.SettingsList.prototype = {
 /**
  * @constructor
  * @extends {WebInspector.SettingsList}
- * @param {function(?string, Object)} validateHandler
- * @param {function(?string, Object)} editHandler
+ * @param {function(?string, !Object)} validateHandler
+ * @param {function(?string, !Object)} editHandler
  */
 WebInspector.EditableSettingsList = function(columns, valuesProvider, validateHandler, editHandler)
 {
@@ -1014,39 +910,39 @@ WebInspector.EditableSettingsList = function(columns, valuesProvider, validateHa
     this._validateHandler = validateHandler;
     this._editHandler = editHandler;
     this._valuesProvider = valuesProvider;
-    /** @type {!Object.<string, HTMLInputElement>} */
+    /** @type {!Object.<string, !HTMLInputElement>} */
     this._addInputElements = {};
-    /** @type {!Object.<string, !Object.<string, HTMLInputElement>>} */
+    /** @type {!Object.<string, !Object.<string, !HTMLInputElement>>} */
     this._editInputElements = {};
-    /** @type {Object.<string, Object.<string, HTMLSpanElement>>} */
+    /** @type {!Object.<string, !Object.<string, !HTMLSpanElement>>} */
     this._textElements = {};
 
     this._addMappingItem = this.addItem(null);
-    this._addMappingItem.addStyleClass("item-editing");
-    this._addMappingItem.addStyleClass("add-list-item");
+    this._addMappingItem.classList.add("item-editing");
+    this._addMappingItem.classList.add("add-list-item");
 }
 
 WebInspector.EditableSettingsList.prototype = {
     /**
      * @param {?string} itemId
      * @param {?string=} beforeId
-     * @return {Element}
+     * @return {!Element}
      */
     addItem: function(itemId, beforeId)
     {
         var listItem = WebInspector.SettingsList.prototype.addItem.call(this, itemId, beforeId);
-        listItem.addStyleClass("editable");
+        listItem.classList.add("editable");
         return listItem;
     },
 
     /**
-     * @param {Element} columnElement
+     * @param {!Element} columnElement
      * @param {string} columnId
      * @param {?string} itemId
      */
     _renderColumn: function(columnElement, columnId, itemId)
     {
-        columnElement.addStyleClass("settings-list-column-" + columnId);
+        columnElement.classList.add("settings-list-column-" + columnId);
         var placeholder = (columnId === "url") ? WebInspector.UIString("URL prefix") : WebInspector.UIString("Folder path");
         if (itemId === null) {
             var inputElement = columnElement.createChild("input", "list-column-editor");
@@ -1056,6 +952,7 @@ WebInspector.EditableSettingsList.prototype = {
             this._addInputElements[columnId] = inputElement;
             return;
         }
+        var validItemId = itemId;
 
         if (!this._editInputElements[itemId])
             this._editInputElements[itemId] = {};
@@ -1077,16 +974,20 @@ WebInspector.EditableSettingsList.prototype = {
         columnElement.inputElement = inputElement;
         this._editInputElements[itemId][columnId] = inputElement;
 
+        /**
+         * @param {?Event} event
+         * @this {WebInspector.EditableSettingsList}
+         */
         function rowClicked(event)
         {
             if (itemId === this._editingId)
                 return;
             event.consume();
             console.assert(!this._editingId);
-            this._editingId = itemId;
-            var listItem = this.itemForId(itemId);
-            listItem.addStyleClass("item-editing");
-            var inputElement = event.target.inputElement || this._editInputElements[itemId][this.columns()[0]];
+            this._editingId = validItemId;
+            var listItem = this.itemForId(validItemId);
+            listItem.classList.add("item-editing");
+            var inputElement = event.target.inputElement || this._editInputElements[validItemId][this.columns()[0]];
             inputElement.focus();
             inputElement.select();
         }
@@ -1094,7 +995,7 @@ WebInspector.EditableSettingsList.prototype = {
 
     /**
      * @param {?string} itemId
-     * @return {Object}
+     * @return {!Object}
      */
     _data: function(itemId)
     {
@@ -1108,13 +1009,13 @@ WebInspector.EditableSettingsList.prototype = {
 
     /**
      * @param {?string} itemId
-     * @return {Object.<string, HTMLInputElement>}
+     * @return {?Object.<string, !HTMLInputElement>}
      */
     _inputElements: function(itemId)
     {
         if (!itemId)
             return this._addInputElements;
-        return this._editInputElements[itemId];
+        return this._editInputElements[itemId] || null;
     },
 
     /**
@@ -1130,9 +1031,9 @@ WebInspector.EditableSettingsList.prototype = {
             var columnId = columns[i];
             var inputElement = this._inputElements(itemId)[columnId];
             if (hasChanges && errorColumns.indexOf(columnId) !== -1)
-                inputElement.addStyleClass("editable-item-error");
+                inputElement.classList.add("editable-item-error");
             else
-                inputElement.removeStyleClass("editable-item-error");
+                inputElement.classList.remove("editable-item-error");
         }
         return !errorColumns.length;
     },
@@ -1167,7 +1068,7 @@ WebInspector.EditableSettingsList.prototype = {
             return;
 
         var listItem = this.itemForId(itemId);
-        listItem.removeStyleClass("item-editing");
+        listItem.classList.remove("item-editing");
         delete this._editingId;
 
         if (!this._hasChanges(itemId))
@@ -1179,7 +1080,7 @@ WebInspector.EditableSettingsList.prototype = {
                 var columnId = columns[i];
                 var inputElement = this._editInputElements[itemId][columnId];
                 inputElement.value = this._textElements[itemId][columnId].textContent;
-                inputElement.removeStyleClass("editable-item-error");
+                inputElement.classList.remove("editable-item-error");
             }
             return;
         }
@@ -1209,3 +1110,6 @@ WebInspector.EditableSettingsList.prototype = {
 
     __proto__: WebInspector.SettingsList.prototype
 }
+
+/** @type {!WebInspector.SettingsController} */
+WebInspector.settingsController;

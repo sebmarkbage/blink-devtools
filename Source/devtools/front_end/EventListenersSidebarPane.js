@@ -34,9 +34,15 @@
 WebInspector.EventListenersSidebarPane = function()
 {
     WebInspector.SidebarPane.call(this, WebInspector.UIString("Event Listeners"));
-    this.bodyElement.addStyleClass("events-pane");
+    this.bodyElement.classList.add("events-pane");
 
     this.sections = [];
+
+    var refreshButton = document.createElement("button");
+    refreshButton.className = "pane-title-button refresh";
+    refreshButton.addEventListener("click", this._refreshButtonClicked.bind(this), false);
+    refreshButton.title = WebInspector.UIString("Refresh");
+    this.titleElement.appendChild(refreshButton);
 
     this.settingsSelectElement = document.createElement("select");
     this.settingsSelectElement.className = "select-filter";
@@ -128,6 +134,13 @@ WebInspector.EventListenersSidebarPane.prototype = {
         delete this._selectedNode;
     },
 
+    _refreshButtonClicked: function()
+    {
+        if (!this._selectedNode)
+            return;
+        this.update(this._selectedNode);
+    },
+
     _changeSetting: function()
     {
         var selectedOption = this.settingsSelectElement[this.settingsSelectElement.selectedIndex];
@@ -183,35 +196,34 @@ WebInspector.EventListenerBar = function(eventListener, nodeId, linkifier)
     this._setFunctionSubtitle(linkifier);
     this.editable = false;
     this.element.className = "event-bar"; /* Changed from "section" */
-    this.headerElement.addStyleClass("source-code");
+    this.headerElement.classList.add("source-code");
     this.propertiesElement.className = "event-properties properties-tree source-code"; /* Changed from "properties" */
 }
 
 WebInspector.EventListenerBar.prototype = {
     update: function()
     {
+        /**
+         * @param {?WebInspector.RemoteObject} nodeObject
+         * @this {WebInspector.EventListenerBar}
+         */
         function updateWithNodeObject(nodeObject)
         {
             var properties = [];
 
-            if (this.eventListener.type)
-                properties.push(WebInspector.RemoteObjectProperty.fromPrimitiveValue("type", this.eventListener.type));
-            if (typeof this.eventListener.useCapture !== "undefined")
-                properties.push(WebInspector.RemoteObjectProperty.fromPrimitiveValue("useCapture", this.eventListener.useCapture));
-            if (typeof this.eventListener.isAttribute !== "undefined")
-                properties.push(WebInspector.RemoteObjectProperty.fromPrimitiveValue("isAttribute", this.eventListener.isAttribute));
+            properties.push(WebInspector.RemoteObjectProperty.fromPrimitiveValue("type", this.eventListener.type));
+            properties.push(WebInspector.RemoteObjectProperty.fromPrimitiveValue("useCapture", this.eventListener.useCapture));
+            properties.push(WebInspector.RemoteObjectProperty.fromPrimitiveValue("isAttribute", this.eventListener.isAttribute));
             if (nodeObject)
                 properties.push(new WebInspector.RemoteObjectProperty("node", nodeObject));
             if (typeof this.eventListener.handler !== "undefined") {
                 var remoteObject = WebInspector.RemoteObject.fromPayload(this.eventListener.handler);
                 properties.push(new WebInspector.RemoteObjectProperty("handler", remoteObject));
             }
-            if (typeof this.eventListener.handlerBody !== "undefined")
-                properties.push(WebInspector.RemoteObjectProperty.fromPrimitiveValue("listenerBody", this.eventListener.handlerBody));
+            properties.push(WebInspector.RemoteObjectProperty.fromPrimitiveValue("listenerBody", this.eventListener.handlerBody));
             if (this.eventListener.sourceName)
                 properties.push(WebInspector.RemoteObjectProperty.fromPrimitiveValue("sourceName", this.eventListener.sourceName));
-            if (this.eventListener.location)
-                properties.push(WebInspector.RemoteObjectProperty.fromPrimitiveValue("lineNumber", this.eventListener.location.lineNumber + 1));
+            properties.push(WebInspector.RemoteObjectProperty.fromPrimitiveValue("lineNumber", this.eventListener.location.lineNumber + 1));
 
             this.updateProperties(properties);
         }
@@ -230,7 +242,7 @@ WebInspector.EventListenerBar.prototype = {
         }
 
         if (node.id === this._nodeId) {
-            this.titleElement.textContent = WebInspector.DOMPresentationUtils.appropriateSelectorFor(node);
+            this.titleElement.textContent = WebInspector.DOMPresentationUtils.simpleSelector(node);
             return;
         }
 
@@ -240,26 +252,15 @@ WebInspector.EventListenerBar.prototype = {
 
     _setFunctionSubtitle: function(linkifier)
     {
-        // Requires that Function.toString() return at least the function's signature.
-        if (this.eventListener.location) {
-            this.subtitleElement.removeChildren();
-            var urlElement;
-            if (this.eventListener.location.scriptId)
-                urlElement = linkifier.linkifyRawLocation(this.eventListener.location);
-            if (!urlElement) {
-                var url = this.eventListener.sourceName;
-                var lineNumber = this.eventListener.location.lineNumber;
-                var columnNumber = 0;
-                urlElement = linkifier.linkifyLocation(url, lineNumber, columnNumber);
-            }
-            this.subtitleElement.appendChild(urlElement);
-        } else {
-            var match = this.eventListener.handlerBody.match(/function ([^\(]+?)\(/);
-            if (match)
-                this.subtitleElement.textContent = match[1];
-            else
-                this.subtitleElement.textContent = WebInspector.UIString("(anonymous function)");
+        this.subtitleElement.removeChildren();
+        var urlElement = linkifier.linkifyRawLocation(this.eventListener.location);
+        if (!urlElement) {
+            var url = this.eventListener.sourceName;
+            var lineNumber = this.eventListener.location.lineNumber;
+            var columnNumber = 0;
+            urlElement = linkifier.linkifyLocation(url, lineNumber, columnNumber);
         }
+        this.subtitleElement.appendChild(urlElement);
     },
 
     __proto__: WebInspector.ObjectPropertiesSection.prototype

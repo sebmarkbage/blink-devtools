@@ -60,13 +60,11 @@ WebInspector.ProfileDataGridNode.prototype = {
         var data = {};
 
         if (this._deoptReason) {
-            var div = document.createElement("div");
-            var marker = div.createChild("span");
-            marker.className = "profile-warn-marker";
+            var content = document.createDocumentFragment();
+            var marker = content.createChild("span", "profile-warn-marker");
             marker.title = WebInspector.UIString("Not optimized: %s", this._deoptReason);
-            var functionName = div.createChild("span");
-            functionName.textContent = this.functionName;
-            data["function"] = div;
+            content.createTextChild(this.functionName);
+            data["function"] = content;
         } else
             data["function"] = this.functionName;
 
@@ -93,18 +91,18 @@ WebInspector.ProfileDataGridNode.prototype = {
         var cell = WebInspector.DataGridNode.prototype.createCell.call(this, columnIdentifier);
 
         if (columnIdentifier === "self" && this._searchMatchedSelfColumn)
-            cell.addStyleClass("highlight");
+            cell.classList.add("highlight");
         else if (columnIdentifier === "total" && this._searchMatchedTotalColumn)
-            cell.addStyleClass("highlight");
+            cell.classList.add("highlight");
 
         if (columnIdentifier !== "function")
             return cell;
 
         if (this._deoptReason)
-            cell.addStyleClass("not-optimized");
+            cell.classList.add("not-optimized");
 
         if (this.profileNode._searchMatchedFunctionColumn)
-            cell.addStyleClass("highlight");
+            cell.classList.add("highlight");
 
         if (this.profileNode.scriptId !== "0") {
             var lineNumber = this.profileNode.lineNumber ? this.profileNode.lineNumber - 1 : 0;
@@ -133,8 +131,9 @@ WebInspector.ProfileDataGridNode.prototype = {
     },
 
     /**
-     * @param {function(Object, Object)} comparator
+     * @param {function(!T, !T)} comparator
      * @param {boolean} force
+     * @template T
      */
     sort: function(comparator, force)
     {
@@ -202,6 +201,7 @@ WebInspector.ProfileDataGridNode.prototype = {
 
     /**
      * @param {!WebInspector.ProfileDataGridNode} node
+     * @return {?WebInspector.ProfileDataGridNode}
      */
     findChild: function(node)
     {
@@ -310,8 +310,8 @@ WebInspector.ProfileDataGridNode.prototype = {
 
 /**
  * @constructor
- * @param {WebInspector.CPUProfileView} profileView
- * @param {ProfilerAgent.CPUProfileNode} rootProfileNode
+ * @param {!WebInspector.CPUProfileView} profileView
+ * @param {!ProfilerAgent.CPUProfileNode} rootProfileNode
  */
 WebInspector.ProfileDataGridTree = function(profileView, rootProfileNode)
 {
@@ -384,7 +384,7 @@ WebInspector.ProfileDataGridTree.propertyComparators = [{}, {}];
 /**
  * @param {string} property
  * @param {boolean} isAscending
- * @return {function(Object, Object)}
+ * @return {function(!Object.<string, *>, !Object.<string, *>)}
  */
 WebInspector.ProfileDataGridTree.propertyComparator = function(property, isAscending)
 {

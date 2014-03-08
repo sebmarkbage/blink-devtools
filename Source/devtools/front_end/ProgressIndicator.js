@@ -52,7 +52,7 @@ WebInspector.ProgressIndicator.Events = {
 
 WebInspector.ProgressIndicator.prototype = {
     /**
-     * @param {Element} parent
+     * @param {!Element} parent
      */
     show: function(parent)
     {
@@ -81,6 +81,9 @@ WebInspector.ProgressIndicator.prototype = {
         this.dispatchEventToListeners(WebInspector.Progress.Events.Canceled);
     },
 
+    /**
+     * @return {boolean}
+     */
     isCanceled: function()
     {
         return this._isCanceled;

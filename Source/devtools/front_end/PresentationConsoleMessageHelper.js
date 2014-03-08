@@ -30,12 +30,12 @@
 
 /**
  * @constructor
- * @param {WebInspector.Workspace} workspace
+ * @param {!WebInspector.Workspace} workspace
  */
 WebInspector.PresentationConsoleMessageHelper = function(workspace)
 {
     /**
-     * @type {Object.<string, Array.<WebInspector.ConsoleMessage>>}
+     * @type {!Object.<string, !Array.<!WebInspector.ConsoleMessage>>}
      */
     this._pendingConsoleMessages = {};
     this._presentationConsoleMessages = [];
@@ -52,15 +52,15 @@ WebInspector.PresentationConsoleMessageHelper = function(workspace)
 
 WebInspector.PresentationConsoleMessageHelper.prototype = {
     /**
-     * @param {WebInspector.Event} event
+     * @param {!WebInspector.Event} event
      */
     _consoleMessageAdded: function(event)
     {
-        var message = /** @type {WebInspector.ConsoleMessage} */ (event.data);
+        var message = /** @type {!WebInspector.ConsoleMessage} */ (event.data);
         if (!message.url || !message.isErrorOrWarning())
             return;
 
-        var rawLocation = message.location();
+        var rawLocation = this._rawLocation(message);
         if (rawLocation)
             this._addConsoleMessageToScript(message, rawLocation);
         else
@@ -68,8 +68,19 @@ WebInspector.PresentationConsoleMessageHelper.prototype = {
     },
 
     /**
-     * @param {WebInspector.ConsoleMessage} message
-     * @param {WebInspector.DebuggerModel.Location} rawLocation
+     * @return {?WebInspector.DebuggerModel.Location}
+     */
+    _rawLocation: function(message)
+    {
+        // FIXME(62725): stack trace line/column numbers are one-based.
+        var lineNumber = message.stackTrace ? message.stackTrace[0].lineNumber - 1 : message.line - 1;
+        var columnNumber = message.stackTrace && message.stackTrace[0].columnNumber ? message.stackTrace[0].columnNumber - 1 : 0;
+        return WebInspector.debuggerModel.createRawLocationByURL(message.url, lineNumber, columnNumber);
+    },
+
+    /**
+     * @param {!WebInspector.ConsoleMessage} message
+     * @param {!WebInspector.DebuggerModel.Location} rawLocation
      */
     _addConsoleMessageToScript: function(message, rawLocation)
     {
@@ -77,7 +88,7 @@ WebInspector.PresentationConsoleMessageHelper.prototype = {
     },
 
     /**
-     * @param {WebInspector.ConsoleMessage} message
+     * @param {!WebInspector.ConsoleMessage} message
      */
     _addPendingConsoleMessage: function(message)
     {
@@ -89,11 +100,11 @@ WebInspector.PresentationConsoleMessageHelper.prototype = {
     },
 
     /**
-     * @param {WebInspector.Event} event
+     * @param {!WebInspector.Event} event
      */
     _parsedScriptSource: function(event)
     {
-        var script = /** @type {WebInspector.Script} */ (event.data);
+        var script = /** @type {!WebInspector.Script} */ (event.data);
 
         var messages = this._pendingConsoleMessages[script.sourceURL];
         if (!messages)
@@ -102,7 +113,7 @@ WebInspector.PresentationConsoleMessageHelper.prototype = {
         var pendingMessages = [];
         for (var i = 0; i < messages.length; i++) {
             var message = messages[i];
-            var rawLocation = /** @type {WebInspector.DebuggerModel.Location} */ (message.location());
+            var rawLocation = this._rawLocation(message);
             if (script.scriptId === rawLocation.scriptId)
                 this._addConsoleMessageToScript(message, rawLocation);
             else
@@ -135,8 +146,8 @@ WebInspector.PresentationConsoleMessageHelper.prototype = {
 
 /**
  * @constructor
- * @param {WebInspector.ConsoleMessage} message
- * @param {WebInspector.DebuggerModel.Location} rawLocation
+ * @param {!WebInspector.ConsoleMessage} message
+ * @param {!WebInspector.DebuggerModel.Location} rawLocation
  */
 WebInspector.PresentationConsoleMessage = function(message, rawLocation)
 {
@@ -146,7 +157,7 @@ WebInspector.PresentationConsoleMessage = function(message, rawLocation)
 
 WebInspector.PresentationConsoleMessage.prototype = {
     /**
-     * @param {WebInspector.UILocation} uiLocation
+     * @param {!WebInspector.UILocation} uiLocation
      */
     _updateLocation: function(uiLocation)
     {

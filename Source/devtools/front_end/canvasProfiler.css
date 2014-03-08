@@ -28,7 +28,8 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-.canvas-profile-view {
+.canvas-profile-view,
+#canvas-replay-image-container {
     overflow: hidden;
     position: absolute;
     top: 0;
@@ -62,10 +63,10 @@
     bottom: 6px;
 }
 
-.canvas-spinner-icon {
-    content: url(Images/spinnerActiveSelected.gif);
+.canvas-profile-view .spinner-icon {
     position: absolute;
     width: 16px;
+    height: 16px;
     right: 4px;
     bottom: 4px;
 }

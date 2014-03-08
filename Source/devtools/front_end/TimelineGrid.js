@@ -83,7 +83,11 @@ WebInspector.TimelineGrid.prototype = {
         this._dividersLabelBarElement.removeChildren();
     },
 
-    updateDividers: function(calculator)
+    /**
+     * @param {!WebInspector.TimelineGrid.Calculator} calculator
+     * @return {!Array.<number>}
+     */
+    _calculateDividerOffsets: function(calculator)
     {
         const minGridSlicePx = 64; // minimal distance between grid lines.
         const gridFreeZoneAtLeftPx = 50;
@@ -106,28 +110,52 @@ WebInspector.TimelineGrid.prototype = {
             gridSliceTime = gridSliceTime / 2;
         this._gridSliceTime = gridSliceTime;
 
-        var firstDividerTime = Math.ceil((calculator.minimumBoundary() - calculator.zeroTime()) / gridSliceTime) * gridSliceTime + calculator.zeroTime();
+        var firstDividerTime = Math.ceil((calculator.minimumBoundary()) / gridSliceTime) * gridSliceTime;
         var lastDividerTime = calculator.maximumBoundary();
         // Add some extra space past the right boundary as the rightmost divider label text
         // may be partially shown rather than just pop up when a new rightmost divider gets into the view.
-        if (calculator.paddingLeft > 0)
+        if (calculator.paddingLeft() > 0)
             lastDividerTime = lastDividerTime + minGridSlicePx / pixelsPerTime;
         dividersCount = Math.ceil((lastDividerTime - firstDividerTime) / gridSliceTime);
+
+        var skipLeftmostDividers = calculator.paddingLeft() === 0;
+
+        if (!gridSliceTime)
+            dividersCount = 0;
+
+        var offsets = [];
+        for (var i = 0; i < dividersCount; ++i) {
+            var left = calculator.computePosition(firstDividerTime + gridSliceTime * i);
+            if (skipLeftmostDividers && left < gridFreeZoneAtLeftPx)
+                continue;
+            offsets.push(firstDividerTime + gridSliceTime * i);
+        }
+
+        return offsets;
+    },
+
+    /**
+     * @param {!WebInspector.TimelineGrid.Calculator} calculator
+     * @param {?Array.<number>=} dividerOffsets
+     * @param {boolean=} printDeltas
+     * @return {boolean}
+     */
+    updateDividers: function(calculator, dividerOffsets, printDeltas)
+    {
+        if (!dividerOffsets) {
+            dividerOffsets = this._calculateDividerOffsets(calculator);
+            printDeltas = false;
+        }
+        var dividersElementClientWidth = this._dividersElement.clientWidth;
 
         // Reuse divider elements and labels.
         var divider = this._dividersElement.firstChild;
         var dividerLabelBar = this._dividersLabelBarElement.firstChild;
 
-        var skipLeftmostDividers = calculator.paddingLeft === 0;
-
-        if (!gridSliceTime)
-            dividersCount = 0;
-
-        for (var i = 0; i < dividersCount; ++i) {
-            var left = calculator.computePosition(firstDividerTime + gridSliceTime * i);
-            if (skipLeftmostDividers && left < gridFreeZoneAtLeftPx)
-                continue;
-
+        const minWidthForTitle = 60;
+        var lastPosition = 0;
+        var lastTime = 0;
+        for (var i = 0; i < dividerOffsets.length; ++i) {
             if (!divider) {
                 divider = document.createElement("div");
                 divider.className = "resources-divider";
@@ -142,8 +170,21 @@ WebInspector.TimelineGrid.prototype = {
                 this._dividersLabelBarElement.appendChild(dividerLabelBar);
             }
 
-            dividerLabelBar._labelElement.textContent = calculator.formatTime(firstDividerTime + gridSliceTime * i - calculator.minimumBoundary());
-            var percentLeft = 100 * left / dividersElementClientWidth;
+            var time = dividerOffsets[i];
+            var position = calculator.computePosition(time);
+            if (position - lastPosition > minWidthForTitle)
+                dividerLabelBar._labelElement.textContent = printDeltas ? calculator.formatTime(time - lastTime) : calculator.formatTime(time);
+            else
+                dividerLabelBar._labelElement.textContent = "";
+
+            if (printDeltas)
+                dividerLabelBar._labelElement.style.width = Math.ceil(position - lastPosition) + "px";
+            else
+                dividerLabelBar._labelElement.style.removeProperty("width");
+
+            lastPosition = position;
+            lastTime = time;
+            var percentLeft = 100 * position / dividersElementClientWidth;
             divider.style.left = percentLeft + "%";
             dividerLabelBar.style.left = percentLeft + "%";
 
@@ -187,18 +228,28 @@ WebInspector.TimelineGrid.prototype = {
 
     hideEventDividers: function()
     {
-        this._eventDividersElement.addStyleClass("hidden");
+        this._eventDividersElement.classList.add("hidden");
     },
 
     showEventDividers: function()
     {
-        this._eventDividersElement.removeStyleClass("hidden");
+        this._eventDividersElement.classList.remove("hidden");
+    },
+
+    hideDividers: function()
+    {
+        this._dividersElement.classList.add("hidden");
+    },
+
+    showDividers: function()
+    {
+        this._dividersElement.classList.remove("hidden");
     },
 
     hideCurtains: function()
     {
-        this._leftCurtainElement.addStyleClass("hidden");
-        this._rightCurtainElement.addStyleClass("hidden");
+        this._leftCurtainElement.classList.add("hidden");
+        this._rightCurtainElement.classList.add("hidden");
     },
 
     /**
@@ -208,9 +259,9 @@ WebInspector.TimelineGrid.prototype = {
     showCurtains: function(gapOffset, gapWidth)
     {
         this._leftCurtainElement.style.width = gapOffset + "px";
-        this._leftCurtainElement.removeStyleClass("hidden");
+        this._leftCurtainElement.classList.remove("hidden");
         this._rightCurtainElement.style.left = (gapOffset + gapWidth) + "px";
-        this._rightCurtainElement.removeStyleClass("hidden");
+        this._rightCurtainElement.classList.remove("hidden");
     },
 
     setScrollAndDividerTop: function(scrollTop, dividersTop)
@@ -228,16 +279,22 @@ WebInspector.TimelineGrid.Calculator = function() { }
 
 WebInspector.TimelineGrid.Calculator.prototype = {
     /**
-     * @param {number} time
      * @return {number}
      */
-    computePosition: function(time) { return 0; },
+    paddingLeft: function() { },
 
     /**
      * @param {number} time
+     * @return {number}
+     */
+    computePosition: function(time) { },
+
+    /**
+     * @param {number} time
+     * @param {boolean=} hires
      * @return {string}
      */
-    formatTime: function(time) { },
+    formatTime: function(time, hires) { },
 
     /** @return {number} */
     minimumBoundary: function() { },

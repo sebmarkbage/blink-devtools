@@ -36,11 +36,20 @@ WebInspector.AuditFormatters = function()
 }
 
 WebInspector.AuditFormatters.Registry = {
+
+    /**
+     * @param {string} text
+     * @return {!Text}
+     */
     text: function(text)
     {
         return document.createTextNode(text);
     },
 
+    /**
+     * @param {string} snippetText
+     * @return {!Element}
+     */
     snippet: function(snippetText)
     {
         var div = document.createElement("div");
@@ -49,6 +58,9 @@ WebInspector.AuditFormatters.Registry = {
         return div;
     },
 
+    /**
+     * @return {!Element}
+     */
     concat: function()
     {
         var parent = document.createElement("span");
@@ -57,6 +69,12 @@ WebInspector.AuditFormatters.Registry = {
         return parent;
     },
 
+    /**
+     * @param {string} url
+     * @param {string=} displayText
+     * @param {boolean=} allowExternalNavigation
+     * @return {!Element}
+     */
     url: function(url, displayText, allowExternalNavigation)
     {
         var a = document.createElement("a");
@@ -68,6 +86,11 @@ WebInspector.AuditFormatters.Registry = {
         return a;
     },
 
+    /**
+     * @param {string} url
+     * @param {number=} line
+     * @return {!Element}
+     */
     resourceLink: function(url, line)
     {
         // FIXME: use WebInspector.Linkifier
@@ -77,7 +100,8 @@ WebInspector.AuditFormatters.Registry = {
 
 WebInspector.AuditFormatters.prototype = {
     /**
-     * @param {string|boolean|number|Object} value
+     * @param {string|boolean|number|!Object} value
+     * @return {!Node}
      */
     apply: function(value)
     {
@@ -111,9 +135,10 @@ WebInspector.AuditFormatters.prototype = {
     },
 
     /**
-     * @param {Object} formatters
-     * @param {Object} thisArgument
-     * @param {string|boolean|number|Object} value
+     * @param {!Object} formatters
+     * @param {?Object} thisArgument
+     * @param {string|boolean|number|!Object} value
+     * @return {*}
      */
     partiallyApply: function(formatters, thisArgument, value)
     {

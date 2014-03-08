@@ -28,7 +28,7 @@
  */
 
 /**
- * @param {Object} obj
+ * @param {!Object} obj
  * @return {boolean}
  */
 Object.isEmpty = function(obj)
@@ -39,8 +39,8 @@ Object.isEmpty = function(obj)
 }
 
 /**
- * @param {!Object.<string,T>} obj
- * @return {!Array.<T>}
+ * @param {!Object.<string,!T>} obj
+ * @return {!Array.<!T>}
  * @template T
  */
 Object.values = function(obj)
@@ -77,6 +77,29 @@ String.prototype.lineEndings = function()
         this._lineEndings.push(this.length);
     }
     return this._lineEndings;
+}
+
+/**
+ * @return {number}
+ */
+String.prototype.lineCount = function()
+{
+    var lineEndings = this.lineEndings();
+    return lineEndings.length;
+}
+
+/**
+ * @return {string}
+ */
+String.prototype.lineAt = function(lineNumber)
+{
+    var lineEndings = this.lineEndings();
+    var lineStart = lineNumber > 0 ? lineEndings[lineNumber - 1] + 1 : 0;
+    var lineEnd = lineEndings[lineNumber];
+    var lineContent = this.substring(lineStart, lineEnd);
+    if (lineContent.length > 0 && lineContent.charAt(lineContent.length - 1) === "\r")
+        lineContent = lineContent.substring(0, lineContent.length - 1);
+    return lineContent;
 }
 
 /**
@@ -232,6 +255,17 @@ String.prototype.endsWith = function(substring)
 }
 
 /**
+ * @return {number}
+ */
+String.prototype.hashCode = function()
+{
+    var result = 0;
+    for (var i = 0; i < this.length; ++i)
+        result = result * 3 + this.charCodeAt(i);
+    return result;
+}
+
+/**
  * @param {string} a
  * @param {string} b
  * @return {number}
@@ -339,9 +373,9 @@ Date.prototype.toISO8601Compact = function()
 Object.defineProperty(Array.prototype, "remove",
 {
     /**
-     * @param {T} value
+     * @param {!T} value
      * @param {boolean=} onlyFirst
-     * @this {Array.<T>}
+     * @this {Array.<!T>}
      * @template T
      */
     value: function(value, onlyFirst)
@@ -380,8 +414,8 @@ Object.defineProperty(Array.prototype, "rotate",
 {
     /**
      * @param {number} index
-     * @return {!Array.<T>}
-     * @this {Array.<T>}
+     * @return {!Array.<!T>}
+     * @this {Array.<!T>}
      * @template T
      */
     value: function(index)
@@ -465,6 +499,59 @@ Object.defineProperty(Array.prototype, "sortRange", sortRange);
 Object.defineProperty(Uint32Array.prototype, "sortRange", sortRange);
 })();
 
+Object.defineProperty(Array.prototype, "stableSort",
+{
+    /**
+     * @param {function(?T, ?T): number=} comparator
+     * @return {!Array.<?T>}
+     * @this {Array.<?T>}
+     * @template T
+     */
+    value: function(comparator)
+    {
+        function defaultComparator(a, b)
+        {
+            return a < b ? -1 : (a > b ? 1 : 0);
+        }
+        comparator = comparator || defaultComparator;
+
+        var indices = new Array(this.length);
+        for (var i = 0; i < this.length; ++i)
+            indices[i] = i;
+        var self = this;
+        /**
+         * @param {number} a
+         * @param {number} b
+         * @return {number}
+         */
+        function indexComparator(a, b)
+        {
+            var result = comparator(self[a], self[b]);
+            return result ? result : a - b;
+        }
+        indices.sort(indexComparator);
+
+        for (var i = 0; i < this.length; ++i) {
+            if (indices[i] < 0 || i === indices[i])
+                continue;
+            var cyclical = i;
+            var saved = this[i];
+            while (true) {
+                var next = indices[cyclical];
+                indices[cyclical] = -1;
+                if (next === i) {
+                    this[cyclical] = saved;
+                    break;
+                } else {
+                    this[cyclical] = this[next];
+                    cyclical = next;
+                }
+            }
+        }
+        return this;
+    }
+});
+
 Object.defineProperty(Array.prototype, "qselect",
 {
     /**
@@ -499,24 +586,28 @@ Object.defineProperty(Array.prototype, "lowerBound",
     /**
      * Return index of the leftmost element that is equal or greater
      * than the specimen object. If there's no such element (i.e. all
-     * elements are smaller than the specimen) returns array.length.
+     * elements are smaller than the specimen) returns right bound.
      * The function works for sorted array.
+     * When specified, |left| (inclusive) and |right| (exclusive) indices
+     * define the search window.
      *
-     * @param {T} object
-     * @param {function(T,S):number=} comparator
+     * @param {!T} object
+     * @param {function(!T,!S):number=} comparator
+     * @param {number=} left
+     * @param {number=} right
      * @return {number}
-     * @this {Array.<S>}
+     * @this {Array.<!S>}
      * @template T,S
      */
-    value: function(object, comparator)
+    value: function(object, comparator, left, right)
     {
         function defaultComparator(a, b)
         {
             return a < b ? -1 : (a > b ? 1 : 0);
         }
         comparator = comparator || defaultComparator;
-        var l = 0;
-        var r = this.length;
+        var l = left || 0;
+        var r = right !== undefined ? right : this.length;
         while (l < r) {
             var m = (l + r) >> 1;
             if (comparator(object, this[m]) > 0)
@@ -533,24 +624,28 @@ Object.defineProperty(Array.prototype, "upperBound",
     /**
      * Return index of the leftmost element that is greater
      * than the specimen object. If there's no such element (i.e. all
-     * elements are smaller than the specimen) returns array.length.
+     * elements are smaller or equal to the specimen) returns right bound.
      * The function works for sorted array.
+     * When specified, |left| (inclusive) and |right| (exclusive) indices
+     * define the search window.
      *
-     * @param {T} object
-     * @param {function(T,S):number=} comparator
+     * @param {!T} object
+     * @param {function(!T,!S):number=} comparator
+     * @param {number=} left
+     * @param {number=} right
      * @return {number}
-     * @this {Array.<S>}
+     * @this {Array.<!S>}
      * @template T,S
      */
-    value: function(object, comparator)
+    value: function(object, comparator, left, right)
     {
         function defaultComparator(a, b)
         {
             return a < b ? -1 : (a > b ? 1 : 0);
         }
         comparator = comparator || defaultComparator;
-        var l = 0;
-        var r = this.length;
+        var l = left || 0;
+        var r = right !== undefined ? right : this.length;
         while (l < r) {
             var m = (l + r) >> 1;
             if (comparator(object, this[m]) >= 0)
@@ -565,10 +660,10 @@ Object.defineProperty(Array.prototype, "upperBound",
 Object.defineProperty(Array.prototype, "binaryIndexOf",
 {
     /**
-     * @param {T} value
-     * @param {function(T,S):number} comparator
+     * @param {!T} value
+     * @param {function(!T,!S):number} comparator
      * @return {number}
-     * @this {Array.<S>}
+     * @this {Array.<!S>}
      * @template T,S
      */
     value: function(value, comparator)
@@ -582,8 +677,8 @@ Object.defineProperty(Array.prototype, "select",
 {
     /**
      * @param {string} field
-     * @return {!Array.<T>}
-     * @this {Array.<Object.<string,T>>}
+     * @return {!Array.<!T>}
+     * @this {Array.<!Object.<string,!T>>}
      * @template T
      */
     value: function(field)
@@ -598,8 +693,8 @@ Object.defineProperty(Array.prototype, "select",
 Object.defineProperty(Array.prototype, "peekLast",
 {
     /**
-     * @return {T|undefined}
-     * @this {Array.<T>}
+     * @return {!T|undefined}
+     * @this {Array.<!T>}
      * @template T
      */
     value: function()
@@ -608,10 +703,75 @@ Object.defineProperty(Array.prototype, "peekLast",
     }
 });
 
+(function(){
+
 /**
- * @param {T} object
- * @param {Array.<S>} list
- * @param {function(T,S):number=} comparator
+ * @param {!Array.<T>} array1
+ * @param {!Array.<T>} array2
+ * @param {function(T,T):number} comparator
+ * @return {!Array.<T>}
+ * @template T
+ */
+function mergeOrIntersect(array1, array2, comparator, mergeNotIntersect)
+{
+    var result = [];
+    var i = 0;
+    var j = 0;
+    while (i < array1.length && j < array2.length) {
+        var compareValue = comparator(array1[i], array2[j]);
+        if (mergeNotIntersect || !compareValue)
+            result.push(compareValue <= 0 ? array1[i] : array2[j]);
+        if (compareValue <= 0)
+            i++;
+        if (compareValue >= 0)
+            j++;
+    }
+    if (mergeNotIntersect) {
+        while (i < array1.length)
+            result.push(array1[i++]);
+        while (j < array2.length)
+            result.push(array2[j++]);
+    }
+    return result;
+}
+
+Object.defineProperty(Array.prototype, "intersectOrdered",
+{
+    /**
+     * @param {!Array.<T>} array
+     * @param {function(T,T):number} comparator
+     * @return {!Array.<T>}
+     * @this {!Array.<T>}
+     * @template T
+     */
+    value: function(array, comparator)
+    {
+        return mergeOrIntersect(this, array, comparator, false);
+    }
+});
+
+Object.defineProperty(Array.prototype, "mergeOrdered",
+{
+    /**
+     * @param {!Array.<T>} array
+     * @param {function(T,T):number} comparator
+     * @return {!Array.<T>}
+     * @this {!Array.<T>}
+     * @template T
+     */
+    value: function(array, comparator)
+    {
+        return mergeOrIntersect(this, array, comparator, true);
+    }
+});
+
+}());
+
+
+/**
+ * @param {!T} object
+ * @param {!Array.<!S>} list
+ * @param {function(!T,!S):number=} comparator
  * @param {boolean=} insertionIndexAfter
  * @return {number}
  * @template T,S
@@ -704,11 +864,17 @@ String.tokenizeFormatString = function(format, formatters)
 }
 
 String.standardFormatters = {
+    /**
+     * @return {number}
+     */
     d: function(substitution)
     {
         return !isNaN(substitution) ? substitution : 0;
     },
 
+    /**
+     * @return {number}
+     */
     f: function(substitution, token)
     {
         if (substitution && token.precision > -1)
@@ -716,6 +882,9 @@ String.standardFormatters = {
         return !isNaN(substitution) ? substitution : (token.precision > -1 ? Number(0).toFixed(token.precision) : 0);
     },
 
+    /**
+     * @return {string}
+     */
     s: function(substitution)
     {
         return substitution;
@@ -724,7 +893,7 @@ String.standardFormatters = {
 
 /**
  * @param {string} format
- * @param {Array.<*>} substitutions
+ * @param {!Array.<*>} substitutions
  * @return {string}
  */
 String.vsprintf = function(format, substitutions)
@@ -803,7 +972,7 @@ String.format = function(format, substitutions, formatters, initialValue, append
  * @param {string} query
  * @param {boolean} caseSensitive
  * @param {boolean} isRegex
- * @return {RegExp}
+ * @return {!RegExp}
  */
 function createSearchRegex(query, caseSensitive, isRegex)
 {
@@ -844,7 +1013,7 @@ function createPlainTextSearchRegex(query, flags)
 }
 
 /**
- * @param {RegExp} regex
+ * @param {!RegExp} regex
  * @param {string} content
  * @return {number}
  */
@@ -975,8 +1144,8 @@ var Map = function()
 
 Map.prototype = {
     /**
-     * @param {!K} key
-     * @param {V=} value
+     * @param {K} key
+     * @param {V} value
      */
     put: function(key, value)
     {
@@ -991,7 +1160,8 @@ Map.prototype = {
     },
 
     /**
-     * @param {!K} key
+     * @param {K} key
+     * @return {V}
      */
     remove: function(key)
     {
@@ -1004,7 +1174,7 @@ Map.prototype = {
     },
 
     /**
-     * @return {!Array.<!K>}
+     * @return {!Array.<K>}
      */
     keys: function()
     {
@@ -1033,7 +1203,7 @@ Map.prototype = {
     },
 
     /**
-     * @param {!K} key
+     * @param {K} key
      * @return {V|undefined}
      */
     get: function(key)
@@ -1043,7 +1213,7 @@ Map.prototype = {
     },
 
     /**
-     * @param {!K} key
+     * @param {K} key
      * @return {boolean}
      */
     contains: function(key)
@@ -1101,6 +1271,7 @@ StringMap.prototype = {
 
     /**
      * @param {string} key
+     * @return {T|undefined}
      */
     remove: function(key)
     {
@@ -1146,6 +1317,7 @@ StringMap.prototype = {
 
     /**
      * @param {string} key
+     * @return {T|undefined}
      */
     get: function(key)
     {
@@ -1186,14 +1358,72 @@ StringMap.prototype = {
 }
 
 /**
+ * @constructor
+ */
+var StringSet = function()
+{
+    /** @type {!StringMap.<boolean>} */
+    this._map = new StringMap();
+}
+
+StringSet.prototype = {
+    /**
+     * @param {string} value
+     */
+    put: function(value)
+    {
+        this._map.put(value, true);
+    },
+
+    /**
+     * @param {string} value
+     * @return {boolean}
+     */
+    remove: function(value)
+    {
+        return !!this._map.remove(value);
+    },
+
+    /**
+     * @return {!Array.<string>}
+     */
+    values: function()
+    {
+        return this._map.keys();
+    },
+
+    /**
+     * @param {string} value
+     * @return {boolean}
+     */
+    contains: function(value)
+    {
+        return this._map.contains(value);
+    },
+
+    /**
+     * @return {number}
+     */
+    size: function()
+    {
+        return this._map.size();
+    },
+
+    clear: function()
+    {
+        this._map.clear();
+    }
+}
+
+/**
  * @param {string} url
  * @param {boolean=} async
  * @param {function(?string)=} callback
  * @return {?string}
  */
-function loadXHR(url, async, callback) 
+function loadXHR(url, async, callback)
 {
-    function onReadyStateChanged() 
+    function onReadyStateChanged()
     {
         if (xhr.readyState !== XMLHttpRequest.DONE)
             return;
@@ -1203,7 +1433,7 @@ function loadXHR(url, async, callback)
             return;
         }
 
-        callback(null); 
+        callback(null);
    }
 
     var xhr = new XMLHttpRequest();
@@ -1213,66 +1443,11 @@ function loadXHR(url, async, callback)
     xhr.send(null);
 
     if (!async) {
-        if (xhr.status === 200) 
+        if (xhr.status === 200)
             return xhr.responseText;
         return null;
     }
     return null;
-}
-
-/**
- * @constructor
- */
-function StringPool()
-{
-    this.reset();
-}
-
-StringPool.prototype = {
-    /**
-     * @param {string} string
-     * @return {string}
-     */
-    intern: function(string)
-    {
-        // Do not mess with setting __proto__ to anything but null, just handle it explicitly.
-        if (string === "__proto__")
-            return "__proto__";
-        var result = this._strings[string];
-        if (result === undefined) {
-            this._strings[string] = string;
-            result = string;
-        }
-        return result;
-    },
-
-    reset: function()
-    {
-        this._strings = Object.create(null);
-    },
-
-    /**
-     * @param {Object} obj
-     * @param {number=} depthLimit
-     */
-    internObjectStrings: function(obj, depthLimit)
-    {
-        if (typeof depthLimit !== "number")
-            depthLimit = 100;
-        else if (--depthLimit < 0)
-            throw "recursion depth limit reached in StringPool.deepIntern(), perhaps attempting to traverse cyclical references?";
-
-        for (var field in obj) {
-            switch (typeof obj[field]) {
-            case "string":
-                obj[field] = this.intern(obj[field]);
-                break;
-            case "object":
-                this.internObjectStrings(obj[field], depthLimit);
-                break;
-            }
-        }
-    }
 }
 
 var _importedScripts = {};
@@ -1299,8 +1474,10 @@ function importScript(scriptName)
     xhr.send(null);
     if (!xhr.responseText)
         throw "empty response arrived for script '" + scriptName + "'";
-    var sourceURL = WebInspector.ParsedURL.completeURL(window.location.href, scriptName); 
-    window.eval(xhr.responseText + "\n//# sourceURL=" + sourceURL);
+    var baseUrl = location.origin + location.pathname;
+    baseUrl = baseUrl.substring(0, baseUrl.lastIndexOf("/"));
+    var sourceURL = baseUrl + "/" + scriptName;
+    self.eval(xhr.responseText + "\n//# sourceURL=" + sourceURL);
 }
 
 var loadScript = importScript;
@@ -1315,8 +1492,8 @@ function CallbackBarrier()
 
 CallbackBarrier.prototype = {
     /**
-     * @param {function(T)=} userCallback
-     * @return {function(T=)}
+     * @param {function(!T)=} userCallback
+     * @return {function(!T=)}
      * @template T
      */
     createCallback: function(userCallback)
@@ -1350,4 +1527,11 @@ CallbackBarrier.prototype = {
         if (!--this._pendingIncomingCallbacksCount && this._outgoingCallback)
             this._outgoingCallback();
     }
+}
+
+/**
+ * @param {*} value
+ */
+function suppressUnused(value)
+{
 }

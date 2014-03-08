@@ -36,23 +36,20 @@ WebInspector.SourcesNavigator = function()
 
     this._tabbedPane = new WebInspector.TabbedPane();
     this._tabbedPane.shrinkableTabs = true;
-    this._tabbedPane.element.addStyleClass("navigator-tabbed-pane");
+    this._tabbedPane.element.classList.add("navigator-tabbed-pane");
 
     this._sourcesView = new WebInspector.NavigatorView();
     this._sourcesView.addEventListener(WebInspector.NavigatorView.Events.ItemSelected, this._sourceSelected, this);
-    this._sourcesView.addEventListener(WebInspector.NavigatorView.Events.ItemSearchStarted, this._itemSearchStarted, this);
     this._sourcesView.addEventListener(WebInspector.NavigatorView.Events.ItemRenamingRequested, this._itemRenamingRequested, this);
     this._sourcesView.addEventListener(WebInspector.NavigatorView.Events.ItemCreationRequested, this._itemCreationRequested, this);
 
     this._contentScriptsView = new WebInspector.NavigatorView();
     this._contentScriptsView.addEventListener(WebInspector.NavigatorView.Events.ItemSelected, this._sourceSelected, this);
-    this._contentScriptsView.addEventListener(WebInspector.NavigatorView.Events.ItemSearchStarted, this._itemSearchStarted, this);
     this._contentScriptsView.addEventListener(WebInspector.NavigatorView.Events.ItemRenamingRequested, this._itemRenamingRequested, this);
     this._contentScriptsView.addEventListener(WebInspector.NavigatorView.Events.ItemCreationRequested, this._itemCreationRequested, this);
 
     this._snippetsView = new WebInspector.SnippetsNavigatorView();
     this._snippetsView.addEventListener(WebInspector.NavigatorView.Events.ItemSelected, this._sourceSelected, this);
-    this._snippetsView.addEventListener(WebInspector.NavigatorView.Events.ItemSearchStarted, this._itemSearchStarted, this);
     this._snippetsView.addEventListener(WebInspector.NavigatorView.Events.ItemRenamingRequested, this._itemRenamingRequested, this);
     this._snippetsView.addEventListener(WebInspector.NavigatorView.Events.ItemCreationRequested, this._itemCreationRequested, this);
 
@@ -66,7 +63,6 @@ WebInspector.SourcesNavigator.Events = {
     SourceSelected: "SourceSelected",
     ItemCreationRequested: "ItemCreationRequested",
     ItemRenamingRequested: "ItemRenamingRequested",
-    ItemSearchStarted: "ItemSearchStarted",
 }
 
 WebInspector.SourcesNavigator.SourcesTab = "sources";
@@ -75,7 +71,7 @@ WebInspector.SourcesNavigator.SnippetsTab = "snippets";
 
 WebInspector.SourcesNavigator.prototype = {
     /**
-     * @return {WebInspector.View}
+     * @return {!WebInspector.View}
      */
     get view()
     {
@@ -83,7 +79,7 @@ WebInspector.SourcesNavigator.prototype = {
     },
 
     /**
-     * @param {WebInspector.UISourceCode} uiSourceCode
+     * @param {!WebInspector.UISourceCode} uiSourceCode
      */
     _navigatorViewForUISourceCode: function(uiSourceCode)
     {
@@ -96,7 +92,7 @@ WebInspector.SourcesNavigator.prototype = {
     },
 
     /**
-     * @param {WebInspector.UISourceCode} uiSourceCode
+     * @param {!WebInspector.UISourceCode} uiSourceCode
      */
     addUISourceCode: function(uiSourceCode)
     {
@@ -104,7 +100,7 @@ WebInspector.SourcesNavigator.prototype = {
     },
 
     /**
-     * @param {WebInspector.UISourceCode} uiSourceCode
+     * @param {!WebInspector.UISourceCode} uiSourceCode
      */
     removeUISourceCode: function(uiSourceCode)
     {
@@ -112,7 +108,7 @@ WebInspector.SourcesNavigator.prototype = {
     },
 
     /**
-     * @param {WebInspector.UISourceCode} uiSourceCode
+     * @param {!WebInspector.UISourceCode} uiSourceCode
      * @param {boolean=} select
      */
     revealUISourceCode: function(uiSourceCode, select)
@@ -125,7 +121,7 @@ WebInspector.SourcesNavigator.prototype = {
     },
 
     /**
-     * @param {WebInspector.UISourceCode} uiSourceCode
+     * @param {!WebInspector.UISourceCode} uiSourceCode
      */
     updateIcon: function(uiSourceCode)
     {
@@ -133,7 +129,7 @@ WebInspector.SourcesNavigator.prototype = {
     },
 
     /**
-     * @param {WebInspector.UISourceCode} uiSourceCode
+     * @param {!WebInspector.UISourceCode} uiSourceCode
      * @param {function(boolean)=} callback
      */
     rename: function(uiSourceCode, callback)
@@ -142,7 +138,7 @@ WebInspector.SourcesNavigator.prototype = {
     },
 
     /**
-     * @param {WebInspector.Event} event
+     * @param {!WebInspector.Event} event
      */
     _sourceSelected: function(event)
     {
@@ -150,15 +146,7 @@ WebInspector.SourcesNavigator.prototype = {
     },
 
     /**
-     * @param {WebInspector.Event} event
-     */
-    _itemSearchStarted: function(event)
-    {
-        this.dispatchEventToListeners(WebInspector.SourcesNavigator.Events.ItemSearchStarted, event.data);
-    },
-
-    /**
-     * @param {WebInspector.Event} event
+     * @param {!WebInspector.Event} event
      */
     _itemRenamingRequested: function(event)
     {
@@ -166,7 +154,7 @@ WebInspector.SourcesNavigator.prototype = {
     },
 
     /**
-     * @param {WebInspector.Event} event
+     * @param {!WebInspector.Event} event
      */
     _itemCreationRequested: function(event)
     {
@@ -187,7 +175,7 @@ WebInspector.SnippetsNavigatorView = function()
 
 WebInspector.SnippetsNavigatorView.prototype = {
     /**
-     * @param {Event} event
+     * @param {!Event} event
      */
     handleContextMenu: function(event)
     {
@@ -197,8 +185,8 @@ WebInspector.SnippetsNavigatorView.prototype = {
     },
 
     /**
-     * @param {Event} event
-     * @param {WebInspector.UISourceCode} uiSourceCode
+     * @param {!Event} event
+     * @param {!WebInspector.UISourceCode} uiSourceCode
      */
     handleFileContextMenu: function(event, uiSourceCode)
     {
@@ -212,7 +200,7 @@ WebInspector.SnippetsNavigatorView.prototype = {
     },
 
     /**
-     * @param {WebInspector.UISourceCode} uiSourceCode
+     * @param {!WebInspector.UISourceCode} uiSourceCode
      */
     _handleEvaluateSnippet: function(uiSourceCode)
     {
@@ -222,7 +210,7 @@ WebInspector.SnippetsNavigatorView.prototype = {
     },
 
     /**
-     * @param {WebInspector.UISourceCode} uiSourceCode
+     * @param {!WebInspector.UISourceCode} uiSourceCode
      */
     _handleRemoveSnippet: function(uiSourceCode)
     {

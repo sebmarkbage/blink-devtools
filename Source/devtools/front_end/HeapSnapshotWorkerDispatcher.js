@@ -49,8 +49,8 @@ WebInspector.HeapSnapshotWorkerDispatcher.prototype = {
     },
 
     /**
-     * @param{string} name
-     * @param{*} data
+     * @param {string} name
+     * @param {*} data
      */
     sendEvent: function(name, data)
     {
@@ -59,7 +59,7 @@ WebInspector.HeapSnapshotWorkerDispatcher.prototype = {
 
     dispatchMessage: function(event)
     {
-        var data = event.data;
+        var data = /** @type {!WebInspector.HeapSnapshotCommon.WorkerCommand } */(event.data);
         var response = {callId: data.callId};
         try {
             switch (data.disposition) {
@@ -89,6 +89,14 @@ WebInspector.HeapSnapshotWorkerDispatcher.prototype = {
                 case "method": {
                     var object = this._objects[data.objectId];
                     response.result = object[data.methodName].apply(object, data.methodArguments);
+                    break;
+                }
+                case "evaluateForTest": {
+                    try {
+                        response.result = eval(data.source)
+                    } catch (e) {
+                        response.result = e.toString();
+                    }
                     break;
                 }
             }

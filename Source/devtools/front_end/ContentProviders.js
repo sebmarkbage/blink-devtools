@@ -31,7 +31,7 @@
 /**
  * @constructor
  * @implements {WebInspector.ContentProvider}
- * @param {Array.<WebInspector.Script>} scripts
+ * @param {!Array.<!WebInspector.Script>} scripts
  */
 WebInspector.ConcatenatedScriptsContentProvider = function(scripts)
 {
@@ -43,7 +43,7 @@ WebInspector.ConcatenatedScriptsContentProvider.scriptCloseTag = "</script>";
 
 WebInspector.ConcatenatedScriptsContentProvider.prototype = {
     /**
-     * @return {Array.<WebInspector.Script>}
+     * @return {!Array.<!WebInspector.Script>}
      */
     _sortedScripts: function()
     {
@@ -80,7 +80,7 @@ WebInspector.ConcatenatedScriptsContentProvider.prototype = {
     },
 
     /**
-     * @return {WebInspector.ResourceType}
+     * @return {!WebInspector.ResourceType}
      */
     contentType: function()
     {
@@ -97,6 +97,7 @@ WebInspector.ConcatenatedScriptsContentProvider.prototype = {
 
         /**
          * @param {?string} content
+         * @this {WebInspector.ConcatenatedScriptsContentProvider}
          */
         function didRequestSource(content)
         {
@@ -112,7 +113,7 @@ WebInspector.ConcatenatedScriptsContentProvider.prototype = {
      * @param {string} query
      * @param {boolean} caseSensitive
      * @param {boolean} isRegex
-     * @param {function(Array.<WebInspector.ContentProvider.SearchMatch>)} callback
+     * @param {function(!Array.<!WebInspector.ContentProvider.SearchMatch>)} callback
      */
     searchInContent: function(query, caseSensitive, isRegex, callback)
     {
@@ -132,8 +133,9 @@ WebInspector.ConcatenatedScriptsContentProvider.prototype = {
         }
 
         /**
-         * @param {WebInspector.Script} script
-         * @param {Array.<PageAgent.SearchMatch>} searchMatches
+         * @param {!WebInspector.Script} script
+         * @param {!Array.<!PageAgent.SearchMatch>} searchMatches
+         * @this {WebInspector.ConcatenatedScriptsContentProvider}
          */
         function searchCallback(script, searchMatches)
         {
@@ -180,16 +182,14 @@ WebInspector.ConcatenatedScriptsContentProvider.prototype = {
         }
 
         return content;
-    },
-
-    __proto__: WebInspector.ContentProvider.prototype
+    }
 }
 
 /**
  * @constructor
- * @param {string} sourceURL
- * @param {WebInspector.ResourceType} contentType
  * @implements {WebInspector.ContentProvider}
+ * @param {string} sourceURL
+ * @param {!WebInspector.ResourceType} contentType
  */
 WebInspector.CompilerSourceMappingContentProvider = function(sourceURL, contentType)
 {
@@ -207,7 +207,7 @@ WebInspector.CompilerSourceMappingContentProvider.prototype = {
     },
 
     /**
-     * @return {WebInspector.ResourceType}
+     * @return {!WebInspector.ResourceType}
      */
     contentType: function()
     {
@@ -224,8 +224,9 @@ WebInspector.CompilerSourceMappingContentProvider.prototype = {
         /**
          * @param {?Protocol.Error} error
          * @param {number} statusCode
-         * @param {NetworkAgent.Headers} headers
+         * @param {!NetworkAgent.Headers} headers
          * @param {string} content
+         * @this {WebInspector.CompilerSourceMappingContentProvider}
          */
         function contentLoaded(error, statusCode, headers, content)
         {
@@ -243,7 +244,7 @@ WebInspector.CompilerSourceMappingContentProvider.prototype = {
      * @param {string} query
      * @param {boolean} caseSensitive
      * @param {boolean} isRegex
-     * @param {function(Array.<WebInspector.ContentProvider.SearchMatch>)} callback
+     * @param {function(!Array.<!WebInspector.ContentProvider.SearchMatch>)} callback
      */
     searchInContent: function(query, caseSensitive, isRegex, callback)
     {
@@ -261,15 +262,13 @@ WebInspector.CompilerSourceMappingContentProvider.prototype = {
 
             callback(WebInspector.ContentProvider.performSearchInContent(content, query, caseSensitive, isRegex));
         }
-    },
-
-    __proto__: WebInspector.ContentProvider.prototype
+    }
 }
 
 /**
  * @constructor
  * @implements {WebInspector.ContentProvider}
- * @param {WebInspector.ResourceType} contentType 
+ * @param {!WebInspector.ResourceType} contentType
  * @param {string} content
  */
 WebInspector.StaticContentProvider = function(contentType, content)
@@ -288,7 +287,7 @@ WebInspector.StaticContentProvider.prototype = {
     },
 
     /**
-     * @return {WebInspector.ResourceType}
+     * @return {!WebInspector.ResourceType}
      */
     contentType: function()
     {
@@ -307,10 +306,13 @@ WebInspector.StaticContentProvider.prototype = {
      * @param {string} query
      * @param {boolean} caseSensitive
      * @param {boolean} isRegex
-     * @param {function(Array.<WebInspector.ContentProvider.SearchMatch>)} callback
+     * @param {function(!Array.<!WebInspector.ContentProvider.SearchMatch>)} callback
      */
     searchInContent: function(query, caseSensitive, isRegex, callback)
     {
+        /**
+         * @this {WebInspector.StaticContentProvider}
+         */
         function performSearch()
         {
             callback(WebInspector.ContentProvider.performSearchInContent(this._content, query, caseSensitive, isRegex));
@@ -318,7 +320,5 @@ WebInspector.StaticContentProvider.prototype = {
 
         // searchInContent should call back later.
         window.setTimeout(performSearch.bind(this), 0);
-    },
-
-    __proto__: WebInspector.ContentProvider.prototype
+    }
 }

@@ -35,7 +35,7 @@ WebInspector.Spectrum = function()
     WebInspector.View.call(this);
     this.registerRequiredCSS("spectrum.css");
 
-    this.element.className = "spectrum-container";
+    this.element.classList.add("spectrum-container");
     this.element.tabIndex = 0;
 
     var topElement = this.element.createChild("div", "spectrum-top");
@@ -56,6 +56,7 @@ WebInspector.Spectrum = function()
     this._alphaElement.setAttribute("type", "range");
     this._alphaElement.setAttribute("min", "0");
     this._alphaElement.setAttribute("max", "100");
+    this._alphaElement.addEventListener("input", alphaDrag.bind(this), false);
     this._alphaElement.addEventListener("change", alphaDrag.bind(this), false);
 
     var swatchElement = document.createElement("span");
@@ -69,6 +70,12 @@ WebInspector.Spectrum = function()
     WebInspector.Spectrum.draggable(this._sliderElement, hueDrag.bind(this));
     WebInspector.Spectrum.draggable(this._draggerElement, colorDrag.bind(this), colorDragStart.bind(this));
 
+    /**
+     * @param {!Element} element
+     * @param {number} dragX
+     * @param {number} dragY
+     * @this {WebInspector.Spectrum}
+     */
     function hueDrag(element, dragX, dragY)
     {
         this._hsv[0] = (this.slideHeight - dragY) / this.slideHeight;
@@ -78,11 +85,21 @@ WebInspector.Spectrum = function()
 
     var initialHelperOffset;
 
-    function colorDragStart(element, dragX, dragY)
+    /**
+     * @this {WebInspector.Spectrum}
+     */
+    function colorDragStart()
     {
         initialHelperOffset = { x: this._dragHelperElement.offsetLeft, y: this._dragHelperElement.offsetTop };
     }
 
+    /**
+     * @param {!Element} element
+     * @param {number} dragX
+     * @param {number} dragY
+     * @param {!MouseEvent} event
+     * @this {WebInspector.Spectrum}
+     */
     function colorDrag(element, dragX, dragY, event)
     {
         if (event.shiftKey) {
@@ -98,6 +115,9 @@ WebInspector.Spectrum = function()
         this._onchange();
     }
 
+    /**
+     * @this {WebInspector.Spectrum}
+     */
     function alphaDrag()
     {
         this._hsv[3] = this._alphaElement.value / 100;
@@ -111,9 +131,9 @@ WebInspector.Spectrum.Events = {
 };
 
 /**
- * @param {Function=} onmove
- * @param {Function=} onstart
- * @param {Function=} onstop
+ * @param {function(!Element, number, number, !MouseEvent)=} onmove
+ * @param {function(!Element, !MouseEvent)=} onstart
+ * @param {function(!Element, !MouseEvent)=} onstop
  */
 WebInspector.Spectrum.draggable = function(element, onmove, onstart, onstop) {
 
@@ -124,11 +144,17 @@ WebInspector.Spectrum.draggable = function(element, onmove, onstart, onstop) {
     var maxHeight;
     var maxWidth;
 
+    /**
+     * @param {?Event} e
+     */
     function consume(e)
     {
         e.consume(true);
     }
 
+    /**
+     * @param {?Event} e
+     */
     function move(e)
     {
         if (dragging) {
@@ -136,18 +162,22 @@ WebInspector.Spectrum.draggable = function(element, onmove, onstart, onstop) {
             var dragY = Math.max(0, Math.min(e.pageY - offset.top + scrollOffset.top, maxHeight));
 
             if (onmove)
-                onmove(element, dragX, dragY, e);
+                onmove(element, dragX, dragY, /** @type {!MouseEvent} */ (e));
         }
     }
 
+    /**
+     * @param {?Event} e
+     */
     function start(e)
     {
-        var rightClick = e.which ? (e.which === 3) : (e.button === 2);
+        var mouseEvent = /** @type {!MouseEvent} */ (e);
+        var rightClick = mouseEvent.which ? (mouseEvent.which === 3) : (mouseEvent.button === 2);
 
         if (!rightClick && !dragging) {
 
             if (onstart)
-                onstart(element, e)
+                onstart(element, mouseEvent);
 
             dragging = true;
             maxHeight = element.clientHeight;
@@ -161,11 +191,14 @@ WebInspector.Spectrum.draggable = function(element, onmove, onstart, onstop) {
             doc.addEventListener("mousemove", move, false);
             doc.addEventListener("mouseup", stop, false);
 
-            move(e);
-            consume(e);
+            move(mouseEvent);
+            consume(mouseEvent);
         }
     }
 
+    /**
+     * @param {?Event} e
+     */
     function stop(e)
     {
         if (dragging) {
@@ -175,7 +208,7 @@ WebInspector.Spectrum.draggable = function(element, onmove, onstart, onstop) {
             doc.removeEventListener("mouseup", stop, false);
 
             if (onstop)
-                onstop(element, e);
+                onstop(element, /** @type {!MouseEvent} */ (e));
         }
 
         dragging = false;
@@ -186,7 +219,7 @@ WebInspector.Spectrum.draggable = function(element, onmove, onstart, onstop) {
 
 WebInspector.Spectrum.prototype = {
     /**
-     * @param {WebInspector.Color} color
+     * @param {!WebInspector.Color} color
      */
     setColor: function(color)
     {
@@ -194,7 +227,7 @@ WebInspector.Spectrum.prototype = {
     },
 
     /**
-     * @return {WebInspector.Color}
+     * @return {!WebInspector.Color}
      */
     color: function()
     {
@@ -305,13 +338,16 @@ WebInspector.SpectrumPopupHelper.Events = {
 
 WebInspector.SpectrumPopupHelper.prototype = {
     /**
-     * @return {WebInspector.Spectrum}
+     * @return {!WebInspector.Spectrum}
      */
     spectrum: function()
     {
         return this._spectrum;
     },
 
+    /**
+     * @return {boolean}
+     */
     toggle: function(element, color, format)
     {
         if (this._popover.isShowing())
@@ -322,6 +358,9 @@ WebInspector.SpectrumPopupHelper.prototype = {
         return this._popover.isShowing();
     },
 
+    /**
+     * @return {boolean}
+     */
     show: function(element, color, format)
     {
         if (this._popover.isShowing()) {
@@ -389,12 +428,14 @@ WebInspector.SpectrumPopupHelper.prototype = {
 
 /**
  * @constructor
+ * @param {boolean=} readOnly
  */
-WebInspector.ColorSwatch = function()
+WebInspector.ColorSwatch = function(readOnly)
 {
     this.element = document.createElement("span");
     this._swatchInnerElement = this.element.createChild("span", "swatch-inner");
-    this.element.title = WebInspector.UIString("Click to open a colorpicker. Shift-click to change color format");
+    var shiftClickMessage = WebInspector.UIString("Shift-click to change color format.");
+    this.element.title = readOnly ? shiftClickMessage : String.sprintf("%s\n%s", WebInspector.UIString("Click to open a colorpicker."), shiftClickMessage);
     this.element.className = "swatch";
     this.element.addEventListener("mousedown", consumeEvent, false);
     this.element.addEventListener("dblclick", consumeEvent, false);

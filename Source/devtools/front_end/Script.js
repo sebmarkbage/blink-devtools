@@ -60,6 +60,17 @@ WebInspector.Script.Events = {
 
 WebInspector.Script.snippetSourceURLPrefix = "snippets:///";
 
+/**
+ * @param {string} source
+ * @return {string}
+ */
+WebInspector.Script._trimSourceURLComment = function(source)
+{
+    var sourceURLRegex = /\n[\040\t]*\/\/[@#]\ssourceURL=\s*(\S*?)\s*$/mg;
+    return source.replace(sourceURLRegex, "");
+},
+
+
 WebInspector.Script.prototype = {
     /**
      * @return {string}
@@ -70,7 +81,7 @@ WebInspector.Script.prototype = {
     },
 
     /**
-     * @return {WebInspector.ResourceType}
+     * @return {!WebInspector.ResourceType}
      */
     contentType: function()
     {
@@ -94,7 +105,7 @@ WebInspector.Script.prototype = {
          */
         function didGetScriptSource(error, source)
         {
-            this._source = error ? "" : source;
+            this._source = WebInspector.Script._trimSourceURLComment(error ? "" : source);
             callback(this._source);
         }
         if (this.scriptId) {
@@ -108,14 +119,14 @@ WebInspector.Script.prototype = {
      * @param {string} query
      * @param {boolean} caseSensitive
      * @param {boolean} isRegex
-     * @param {function(Array.<PageAgent.SearchMatch>)} callback
+     * @param {function(!Array.<!PageAgent.SearchMatch>)} callback
      */
     searchInContent: function(query, caseSensitive, isRegex, callback)
     {
         /**
          * @this {WebInspector.Script}
          * @param {?Protocol.Error} error
-         * @param {Array.<PageAgent.SearchMatch>} searchMatches
+         * @param {!Array.<!PageAgent.SearchMatch>} searchMatches
          */
         function innerCallback(error, searchMatches)
         {
@@ -137,32 +148,48 @@ WebInspector.Script.prototype = {
     },
 
     /**
+     * @param {string} source
+     * @return {string}
+     */
+    _appendSourceURLCommentIfNeeded: function(source)
+    {
+        if (!this.hasSourceURL)
+            return source;
+        return source + "\n //# sourceURL=" + this.sourceURL;
+    },
+
+    /**
      * @param {string} newSource
-     * @param {function(?Protocol.Error, DebuggerAgent.SetScriptSourceError=, Array.<DebuggerAgent.CallFrame>=, boolean=)} callback
+     * @param {function(?Protocol.Error, !DebuggerAgent.SetScriptSourceError=, !Array.<!DebuggerAgent.CallFrame>=, !DebuggerAgent.StackTrace=, boolean=)} callback
      */
     editSource: function(newSource, callback)
     {
         /**
          * @this {WebInspector.Script}
          * @param {?Protocol.Error} error
-         * @param {DebuggerAgent.SetScriptSourceError=} errorData
-         * @param {Array.<DebuggerAgent.CallFrame>=} callFrames
-         * @param {Object=} debugData
+         * @param {!DebuggerAgent.SetScriptSourceError=} errorData
+         * @param {!Array.<!DebuggerAgent.CallFrame>=} callFrames
+         * @param {!Object=} debugData
+         * @param {!DebuggerAgent.StackTrace=} asyncStackTrace
          */
-        function didEditScriptSource(error, errorData, callFrames, debugData)
+        function didEditScriptSource(error, errorData, callFrames, debugData, asyncStackTrace)
         {
             // FIXME: support debugData.stack_update_needs_step_in flag by calling WebInspector.debugger_model.callStackModified
             if (!error)
                 this._source = newSource;
             var needsStepIn = !!debugData && debugData["stack_update_needs_step_in"] === true;
-            callback(error, errorData, callFrames, needsStepIn);
+            callback(error, errorData, callFrames, asyncStackTrace, needsStepIn);
             if (!error)
                 this.dispatchEventToListeners(WebInspector.Script.Events.ScriptEdited, newSource);
         }
-        if (this.scriptId) {
-            // Script failed to parse.
+
+        newSource = WebInspector.Script._trimSourceURLComment(newSource);
+        // We append correct sourceURL to script for consistency only. It's not actually needed for things to work correctly.
+        newSource = this._appendSourceURLCommentIfNeeded(newSource);
+
+        if (this.scriptId)
             DebuggerAgent.setScriptSource(this.scriptId, newSource, undefined, didEditScriptSource.bind(this));
-        } else
+        else
             callback("Script failed to parse");
     },
 
@@ -194,7 +221,7 @@ WebInspector.Script.prototype = {
     /**
      * @param {number} lineNumber
      * @param {number=} columnNumber
-     * @return {WebInspector.UILocation}
+     * @return {!WebInspector.UILocation}
      */
     rawLocationToUILocation: function(lineNumber, columnNumber)
     {
@@ -203,7 +230,7 @@ WebInspector.Script.prototype = {
         for (var i = this._sourceMappings.length - 1; !uiLocation && i >= 0; --i)
             uiLocation = this._sourceMappings[i].rawLocationToUILocation(rawLocation);
         console.assert(uiLocation, "Script raw location can not be mapped to any ui location.");
-        return uiLocation.uiSourceCode.overrideLocation(uiLocation);
+        return /** @type {!WebInspector.UILocation} */ (uiLocation);
     },
 
     /**
@@ -215,6 +242,16 @@ WebInspector.Script.prototype = {
         this.updateLocations();
     },
 
+    /**
+     * @return {!WebInspector.SourceMapping}
+     */
+    popSourceMapping: function()
+    {
+        var sourceMapping = this._sourceMappings.pop();
+        this.updateLocations();
+        return sourceMapping;
+    },
+
     updateLocations: function()
     {
         var items = this._locations.items();
@@ -223,9 +260,9 @@ WebInspector.Script.prototype = {
     },
 
     /**
-     * @param {WebInspector.DebuggerModel.Location} rawLocation
-     * @param {function(WebInspector.UILocation):(boolean|undefined)} updateDelegate
-     * @return {WebInspector.Script.Location}
+     * @param {!WebInspector.DebuggerModel.Location} rawLocation
+     * @param {function(!WebInspector.UILocation):(boolean|undefined)} updateDelegate
+     * @return {!WebInspector.Script.Location}
      */
     createLiveLocation: function(rawLocation, updateDelegate)
     {
@@ -242,9 +279,9 @@ WebInspector.Script.prototype = {
 /**
  * @constructor
  * @extends {WebInspector.LiveLocation}
- * @param {WebInspector.Script} script
- * @param {WebInspector.DebuggerModel.Location} rawLocation
- * @param {function(WebInspector.UILocation):(boolean|undefined)} updateDelegate
+ * @param {!WebInspector.Script} script
+ * @param {!WebInspector.DebuggerModel.Location} rawLocation
+ * @param {function(!WebInspector.UILocation):(boolean|undefined)} updateDelegate
  */
 WebInspector.Script.Location = function(script, rawLocation, updateDelegate)
 {
@@ -254,11 +291,11 @@ WebInspector.Script.Location = function(script, rawLocation, updateDelegate)
 
 WebInspector.Script.Location.prototype = {
     /**
-     * @return {WebInspector.UILocation}
+     * @return {!WebInspector.UILocation}
      */
     uiLocation: function()
     {
-        var debuggerModelLocation = /** @type {WebInspector.DebuggerModel.Location} */ (this.rawLocation());
+        var debuggerModelLocation = /** @type {!WebInspector.DebuggerModel.Location} */ (this.rawLocation());
         return this._script.rawLocationToUILocation(debuggerModelLocation.lineNumber, debuggerModelLocation.columnNumber);
     },
 

@@ -31,6 +31,7 @@
 WebInspector.View = function()
 {
     this.element = document.createElement("div");
+    this.element.className = "view";
     this.element.__view = this;
     this._visible = true;
     this._isRoot = false;
@@ -52,6 +53,11 @@ WebInspector.View.prototype = {
         this._isRoot = true;
     },
 
+    makeLayoutBoundary: function()
+    {
+        this._isLayoutBoundary = true;
+    },
+
     /**
      * @return {?WebInspector.View}
      */
@@ -60,6 +66,9 @@ WebInspector.View.prototype = {
         return this._parentView;
     },
 
+    /**
+     * @return {boolean}
+     */
     isShowing: function()
     {
         return this._isShowing;
@@ -141,6 +150,41 @@ WebInspector.View.prototype = {
         this._callOnVisibleChildren(this._processOnResize);
     },
 
+    _processDiscardCachedSize: function()
+    {
+        if (this._isLayoutBoundary) {
+            this.element.style.removeProperty("width");
+            this.element.style.removeProperty("height");
+        }
+        this._callOnVisibleChildren(this._processDiscardCachedSize);
+    },
+
+    _cacheSize: function()
+    {
+        this._prepareCacheSize();
+        this._applyCacheSize();
+    },
+
+    _prepareCacheSize: function()
+    {
+        if (this._isLayoutBoundary) {
+            this._cachedOffsetWidth = this.element.offsetWidth;
+            this._cachedOffsetHeight = this.element.offsetHeight;
+        }
+        this._callOnVisibleChildren(this._prepareCacheSize);
+    },
+
+    _applyCacheSize: function()
+    {
+        if (this._isLayoutBoundary) {
+            this.element.style.setProperty("width", this._cachedOffsetWidth + "px");
+            this.element.style.setProperty("height", this._cachedOffsetHeight + "px");
+            delete this._cachedOffsetWidth;
+            delete this._cachedOffsetHeight;
+        }
+        this._callOnVisibleChildren(this._applyCacheSize);
+    },
+
     /**
      * @param {function(this:WebInspector.View)} notification
      */
@@ -167,8 +211,8 @@ WebInspector.View.prototype = {
     },
 
     /**
-     * @param {Element} parentElement
-     * @param {Element=} insertBefore
+     * @param {?Element} parentElement
+     * @param {!Element=} insertBefore
      */
     show: function(parentElement, insertBefore)
     {
@@ -189,15 +233,16 @@ WebInspector.View.prototype = {
                 this._isRoot = false;
             } else
                 WebInspector.View._assert(this._isRoot, "Attempt to attach view to orphan node");
-        } else if (this._visible)
+        } else if (this._visible) {
             return;
+        }
 
         this._visible = true;
 
         if (this._parentIsShowing())
             this._processWillShow();
 
-        this.element.addStyleClass("visible");
+        this.element.classList.add("visible");
 
         // Reparent
         if (this.element.parentElement !== parentElement) {
@@ -208,8 +253,10 @@ WebInspector.View.prototype = {
                 WebInspector.View._originalAppendChild.call(parentElement, this.element);
         }
 
-        if (this._parentIsShowing())
+        if (this._parentIsShowing()) {
             this._processWasShown();
+            this._cacheSize();
+        }
     },
 
     /**
@@ -221,11 +268,13 @@ WebInspector.View.prototype = {
         if (!parentElement)
             return;
 
-        if (this._parentIsShowing())
+        if (this._parentIsShowing()) {
+            this._processDiscardCachedSize();
             this._processWillHide();
+        }
 
         if (this._hideOnDetach && !overrideHideOnDetach) {
-            this.element.removeStyleClass("visible");
+            this.element.classList.remove("visible");
             this._visible = false;
             if (this._parentIsShowing())
                 this._processWasHidden();
@@ -257,6 +306,9 @@ WebInspector.View.prototype = {
             children[i].detach();
     },
 
+    /**
+     * @return {!Array.<!Element>}
+     */
     elementsToRestoreScrollPositionsFor: function()
     {
         return [this.element];
@@ -284,6 +336,9 @@ WebInspector.View.prototype = {
         }
     },
 
+    /**
+     * @return {boolean}
+     */
     canHighlightPosition: function()
     {
         return false;
@@ -299,7 +354,13 @@ WebInspector.View.prototype = {
 
     doResize: function()
     {
-        this._processOnResize();
+        if (!this.isShowing())
+            return;
+        this._processDiscardCachedSize();
+        // No matter what notification we are in, dispatching onResize is not needed.
+        if (!this._inNotification())
+            this._callOnVisibleChildren(this._processOnResize);
+        this._cacheSize();
     },
 
     registerRequiredCSS: function(cssFile)
@@ -402,7 +463,7 @@ WebInspector.View.prototype = {
     },
 
     /**
-     * @return {Element}
+     * @return {!Element}
      */
     defaultFocusedElement: function()
     {
@@ -410,7 +471,7 @@ WebInspector.View.prototype = {
     },
 
     /**
-     * @param {Element} element
+     * @param {!Element} element
      */
     setDefaultFocusedElement: function(element)
     {
@@ -427,7 +488,7 @@ WebInspector.View.prototype = {
     },
 
     /**
-     * @return {Size}
+     * @return {!Size}
      */
     measurePreferredSize: function()
     {
@@ -482,21 +543,6 @@ WebInspector.View._assert = function(condition, message)
 }
 
 /**
- * @interface
- */
-WebInspector.ViewFactory = function()
-{
-}
-
-WebInspector.ViewFactory.prototype = {
-    /**
-     * @param {string=} id
-     * @return {WebInspector.View}
-     */
-    createView: function(id) {}
-}
-
-/**
  * @constructor
  * @extends {WebInspector.View}
  * @param {function()} resizeCallback
@@ -516,16 +562,15 @@ WebInspector.ViewWithResizeCallback.prototype = {
     __proto__: WebInspector.View.prototype
 }
 
-
 Element.prototype.appendChild = function(child)
 {
-    WebInspector.View._assert(!child.__view, "Attempt to add view via regular DOM operation.");
+    WebInspector.View._assert(!child.__view || child.parentElement === this, "Attempt to add view via regular DOM operation.");
     return WebInspector.View._originalAppendChild.call(this, child);
 }
 
 Element.prototype.insertBefore = function(child, anchor)
 {
-    WebInspector.View._assert(!child.__view, "Attempt to add view via regular DOM operation.");
+    WebInspector.View._assert(!child.__view || child.parentElement === this, "Attempt to add view via regular DOM operation.");
     return WebInspector.View._originalInsertBefore.call(this, child, anchor);
 }
 

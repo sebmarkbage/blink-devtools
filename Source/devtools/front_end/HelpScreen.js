@@ -39,7 +39,7 @@ WebInspector.HelpScreen = function(title)
     this.markAsRoot();
     this.registerRequiredCSS("helpScreen.css");
 
-    this.element.className = "help-window-outer";
+    this.element.classList.add("help-window-outer");
     this.element.addEventListener("keydown", this._onKeyDown.bind(this), false);
     this.element.tabIndex = 0;
 
@@ -53,7 +53,7 @@ WebInspector.HelpScreen = function(title)
 }
 
 /**
- * @type {WebInspector.HelpScreen}
+ * @type {?WebInspector.HelpScreen}
  */
 WebInspector.HelpScreen._visibleScreen = null;
 
@@ -88,7 +88,7 @@ WebInspector.HelpScreen.prototype = {
         if (visibleHelpScreen)
             visibleHelpScreen.hide();
         WebInspector.HelpScreen._visibleScreen = this;
-        this.show(document.body);
+        this.show(WebInspector.inspectorView.element);
         this.focus();
     },
 
@@ -129,29 +129,19 @@ WebInspector.HelpScreen.prototype = {
 
 /**
  * @constructor
- * @param {string=} title
- * @param {string=} message
  * @extends {WebInspector.HelpScreen}
  */
-WebInspector.HelpScreenUntilReload = function(title, message)
+WebInspector.RemoteDebuggingTerminatedScreen = function(reason)
 {
-    WebInspector.HelpScreen.call(this, title);
+    WebInspector.HelpScreen.call(this, WebInspector.UIString("Detached from the target"));
     var p = this.contentElement.createChild("p");
-    p.addStyleClass("help-section");
-    p.textContent = message;
-    WebInspector.debuggerModel.addEventListener(WebInspector.DebuggerModel.Events.GlobalObjectCleared, this.hide, this);
+    p.classList.add("help-section");
+    p.createChild("span").textContent = WebInspector.UIString("Remote debugging has been terminated with reason: ");
+    p.createChild("span", "error-message").textContent = reason;
+    p.createChild("br");
+    p.createChild("span").textContent = WebInspector.UIString("Please re-attach to the new target.");
 }
 
-WebInspector.HelpScreenUntilReload.prototype = {
-    /**
-     * @override
-     */
-    willHide: function()
-    {
-        WebInspector.debuggerModel.removeEventListener(WebInspector.DebuggerModel.Events.GlobalObjectCleared, this.hide, this);
-        WebInspector.HelpScreen.prototype.willHide.call(this);
-    },
-
+WebInspector.RemoteDebuggingTerminatedScreen.prototype = {
     __proto__: WebInspector.HelpScreen.prototype
 }
-

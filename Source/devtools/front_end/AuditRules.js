@@ -44,9 +44,9 @@ WebInspector.AuditRules.CacheableResponseCodes =
 
 /**
  * @param {!Array.<!WebInspector.NetworkRequest>} requests
- * @param {Array.<!WebInspector.resourceTypes>} types
+ * @param {?Array.<!WebInspector.resourceTypes>} types
  * @param {boolean} needFullResources
- * @return {(Object.<string, !Array.<!WebInspector.NetworkRequest>>|Object.<string, !Array.<string>>)}
+ * @return {!Object.<string, !Array.<!WebInspector.NetworkRequest|string>>}
  */
 WebInspector.AuditRules.getDomainToResourcesMap = function(requests, types, needFullResources)
 {
@@ -75,14 +75,14 @@ WebInspector.AuditRules.getDomainToResourcesMap = function(requests, types, need
  */
 WebInspector.AuditRules.GzipRule = function()
 {
-    WebInspector.AuditRule.call(this, "network-gzip", "Enable gzip compression");
+    WebInspector.AuditRule.call(this, "network-gzip", WebInspector.UIString("Enable gzip compression"));
 }
 
 WebInspector.AuditRules.GzipRule.prototype = {
     /**
      * @param {!Array.<!WebInspector.NetworkRequest>} requests
      * @param {!WebInspector.AuditRuleResult} result
-     * @param {function(WebInspector.AuditRuleResult)} callback
+     * @param {function(?WebInspector.AuditRuleResult)} callback
      * @param {!WebInspector.Progress} progress
      */
     doRun: function(requests, result, callback, progress)
@@ -108,12 +108,17 @@ WebInspector.AuditRules.GzipRule.prototype = {
                 result.violationCount++;
             }
         }
-        if (!totalSavings)
-            return callback(null);
-        summary.value = String.sprintf("Compressing the following resources with gzip could reduce their transfer size by about two thirds (~%s):", Number.bytesToString(totalSavings));
+        if (!totalSavings) {
+            callback(null);
+            return;
+        }
+        summary.value = WebInspector.UIString("Compressing the following resources with gzip could reduce their transfer size by about two thirds (~%s):", Number.bytesToString(totalSavings));
         callback(result);
     },
 
+    /**
+     * @param {!WebInspector.NetworkRequest} request
+     */
     _isCompressed: function(request)
     {
         var encodingHeader = request.responseHeaderValue("Content-Encoding");
@@ -123,6 +128,9 @@ WebInspector.AuditRules.GzipRule.prototype = {
         return /\b(?:gzip|deflate)\b/.test(encodingHeader);
     },
 
+    /**
+     * @param {!WebInspector.NetworkRequest} request
+     */
     _shouldCompress: function(request)
     {
         return request.type.isTextType() && request.parsedURL.host && request.resourceSize !== undefined && request.resourceSize > 150;
@@ -147,7 +155,7 @@ WebInspector.AuditRules.CombineExternalResourcesRule.prototype = {
     /**
      * @param {!Array.<!WebInspector.NetworkRequest>} requests
      * @param {!WebInspector.AuditRuleResult} result
-     * @param {function(WebInspector.AuditRuleResult)} callback
+     * @param {function(?WebInspector.AuditRuleResult)} callback
      * @param {!WebInspector.Progress} progress
      */
     doRun: function(requests, result, callback, progress)
@@ -162,13 +170,15 @@ WebInspector.AuditRules.CombineExternalResourcesRule.prototype = {
             if (extraResourceCount <= 0)
                 continue;
             penalizedResourceCount += extraResourceCount - 1;
-            summary.addChild(String.sprintf("%d %s resources served from %s.", domainResources.length, this._resourceTypeName, WebInspector.AuditRuleResult.resourceDomain(domain)));
+            summary.addChild(WebInspector.UIString("%d %s resources served from %s.", domainResources.length, this._resourceTypeName, WebInspector.AuditRuleResult.resourceDomain(domain)));
             result.violationCount += domainResources.length;
         }
-        if (!penalizedResourceCount)
-            return callback(null);
+        if (!penalizedResourceCount) {
+            callback(null);
+            return;
+        }
 
-        summary.value = "There are multiple resources served from same domain. Consider combining them into as few files as possible.";
+        summary.value = WebInspector.UIString("There are multiple resources served from same domain. Consider combining them into as few files as possible.");
         callback(result);
     },
 
@@ -180,7 +190,7 @@ WebInspector.AuditRules.CombineExternalResourcesRule.prototype = {
  * @extends {WebInspector.AuditRules.CombineExternalResourcesRule}
  */
 WebInspector.AuditRules.CombineJsResourcesRule = function(allowedPerDomain) {
-    WebInspector.AuditRules.CombineExternalResourcesRule.call(this, "page-externaljs", "Combine external JavaScript", WebInspector.resourceTypes.Script, "JavaScript", allowedPerDomain);
+    WebInspector.AuditRules.CombineExternalResourcesRule.call(this, "page-externaljs", WebInspector.UIString("Combine external JavaScript"), WebInspector.resourceTypes.Script, "JavaScript", allowedPerDomain);
 }
 
 WebInspector.AuditRules.CombineJsResourcesRule.prototype = {
@@ -192,7 +202,7 @@ WebInspector.AuditRules.CombineJsResourcesRule.prototype = {
  * @extends {WebInspector.AuditRules.CombineExternalResourcesRule}
  */
 WebInspector.AuditRules.CombineCssResourcesRule = function(allowedPerDomain) {
-    WebInspector.AuditRules.CombineExternalResourcesRule.call(this, "page-externalcss", "Combine external CSS", WebInspector.resourceTypes.Stylesheet, "CSS", allowedPerDomain);
+    WebInspector.AuditRules.CombineExternalResourcesRule.call(this, "page-externalcss", WebInspector.UIString("Combine external CSS"), WebInspector.resourceTypes.Stylesheet, "CSS", allowedPerDomain);
 }
 
 WebInspector.AuditRules.CombineCssResourcesRule.prototype = {
@@ -204,7 +214,7 @@ WebInspector.AuditRules.CombineCssResourcesRule.prototype = {
  * @extends {WebInspector.AuditRule}
  */
 WebInspector.AuditRules.MinimizeDnsLookupsRule = function(hostCountThreshold) {
-    WebInspector.AuditRule.call(this, "network-minimizelookups", "Minimize DNS lookups");
+    WebInspector.AuditRule.call(this, "network-minimizelookups", WebInspector.UIString("Minimize DNS lookups"));
     this._hostCountThreshold = hostCountThreshold;
 }
 
@@ -212,7 +222,7 @@ WebInspector.AuditRules.MinimizeDnsLookupsRule.prototype = {
     /**
      * @param {!Array.<!WebInspector.NetworkRequest>} requests
      * @param {!WebInspector.AuditRuleResult} result
-     * @param {function(WebInspector.AuditRuleResult)} callback
+     * @param {function(?WebInspector.AuditRuleResult)} callback
      * @param {!WebInspector.Progress} progress
      */
     doRun: function(requests, result, callback, progress)
@@ -230,10 +240,12 @@ WebInspector.AuditRules.MinimizeDnsLookupsRule.prototype = {
             summary.addSnippet(domain);
             result.violationCount++;
         }
-        if (!summary.children || summary.children.length <= this._hostCountThreshold)
-            return callback(null);
+        if (!summary.children || summary.children.length <= this._hostCountThreshold) {
+            callback(null);
+            return;
+        }
 
-        summary.value = "The following domains only serve one resource each. If possible, avoid the extra DNS lookups by serving these resources from existing domains.";
+        summary.value = WebInspector.UIString("The following domains only serve one resource each. If possible, avoid the extra DNS lookups by serving these resources from existing domains.");
         callback(result);
     },
 
@@ -246,7 +258,7 @@ WebInspector.AuditRules.MinimizeDnsLookupsRule.prototype = {
  */
 WebInspector.AuditRules.ParallelizeDownloadRule = function(optimalHostnameCount, minRequestThreshold, minBalanceThreshold)
 {
-    WebInspector.AuditRule.call(this, "network-parallelizehosts", "Parallelize downloads across hostnames");
+    WebInspector.AuditRule.call(this, "network-parallelizehosts", WebInspector.UIString("Parallelize downloads across hostnames"));
     this._optimalHostnameCount = optimalHostnameCount;
     this._minRequestThreshold = minRequestThreshold;
     this._minBalanceThreshold = minBalanceThreshold;
@@ -256,16 +268,20 @@ WebInspector.AuditRules.ParallelizeDownloadRule.prototype = {
     /**
      * @param {!Array.<!WebInspector.NetworkRequest>} requests
      * @param {!WebInspector.AuditRuleResult} result
-     * @param {function(WebInspector.AuditRuleResult)} callback
+     * @param {function(?WebInspector.AuditRuleResult)} callback
      * @param {!WebInspector.Progress} progress
      */
     doRun: function(requests, result, callback, progress)
     {
+        /**
+         * @param {string} a
+         * @param {string} b
+         */
         function hostSorter(a, b)
         {
             var aCount = domainToResourcesMap[a].length;
             var bCount = domainToResourcesMap[b].length;
-            return (aCount < bCount) ? 1 : (aCount == bCount) ? 0 : -1;
+            return (aCount < bCount) ? 1 : (aCount === bCount) ? 0 : -1;
         }
 
         var domainToResourcesMap = WebInspector.AuditRules.getDomainToResourcesMap(
@@ -277,8 +293,10 @@ WebInspector.AuditRules.ParallelizeDownloadRule.prototype = {
         for (var url in domainToResourcesMap)
             hosts.push(url);
 
-        if (!hosts.length)
-            return callback(null); // no hosts (local file or something)
+        if (!hosts.length) {
+            callback(null); // no hosts (local file or something)
+            return;
+        }
 
         hosts.sort(hostSorter);
 
@@ -288,8 +306,10 @@ WebInspector.AuditRules.ParallelizeDownloadRule.prototype = {
 
         var busiestHostResourceCount = domainToResourcesMap[hosts[0]].length;
         var requestCountAboveThreshold = busiestHostResourceCount - this._minRequestThreshold;
-        if (requestCountAboveThreshold <= 0)
-            return callback(null);
+        if (requestCountAboveThreshold <= 0) {
+            callback(null);
+            return;
+        }
 
         var avgResourcesPerHost = 0;
         for (var i = 0, size = hosts.length; i < size; ++i)
@@ -301,11 +321,13 @@ WebInspector.AuditRules.ParallelizeDownloadRule.prototype = {
 
         var pctAboveAvg = (requestCountAboveThreshold / avgResourcesPerHost) - 1.0;
         var minBalanceThreshold = this._minBalanceThreshold;
-        if (pctAboveAvg < minBalanceThreshold)
-            return callback(null);
+        if (pctAboveAvg < minBalanceThreshold) {
+            callback(null);
+            return;
+        }
 
         var requestsOnBusiestHost = domainToResourcesMap[hosts[0]];
-        var entry = result.addChild(String.sprintf("This page makes %d parallelizable requests to %s. Increase download parallelization by distributing the following requests across multiple hostnames.", busiestHostResourceCount, hosts[0]), true);
+        var entry = result.addChild(WebInspector.UIString("This page makes %d parallelizable requests to %s. Increase download parallelization by distributing the following requests across multiple hostnames.", busiestHostResourceCount, hosts[0]), true);
         for (var i = 0; i < requestsOnBusiestHost.length; ++i)
             entry.addURL(requestsOnBusiestHost[i].url);
 
@@ -324,24 +346,22 @@ WebInspector.AuditRules.ParallelizeDownloadRule.prototype = {
  */
 WebInspector.AuditRules.UnusedCssRule = function()
 {
-    WebInspector.AuditRule.call(this, "page-unusedcss", "Remove unused CSS rules");
+    WebInspector.AuditRule.call(this, "page-unusedcss", WebInspector.UIString("Remove unused CSS rules"));
 }
 
 WebInspector.AuditRules.UnusedCssRule.prototype = {
     /**
      * @param {!Array.<!WebInspector.NetworkRequest>} requests
      * @param {!WebInspector.AuditRuleResult} result
-     * @param {function(WebInspector.AuditRuleResult)} callback
+     * @param {function(?WebInspector.AuditRuleResult)} callback
      * @param {!WebInspector.Progress} progress
      */
     doRun: function(requests, result, callback, progress)
     {
-        var self = this;
-
+        /**
+         * @param {!Array.<!WebInspector.AuditRules.ParsedStyleSheet>} styleSheets
+         */
         function evalCallback(styleSheets) {
-            if (progress.isCanceled())
-                return;
-
             if (!styleSheets.length)
                 return callback(null);
 
@@ -358,7 +378,12 @@ WebInspector.AuditRules.UnusedCssRule.prototype = {
                 }
             }
 
-            function selectorsCallback(callback, styleSheets, testedSelectors, foundSelectors)
+            var foundSelectors = {};
+
+            /**
+             * @param {!Array.<!WebInspector.AuditRules.ParsedStyleSheet>} styleSheets
+             */
+            function selectorsCallback(styleSheets)
             {
                 if (progress.isCanceled())
                     return;
@@ -384,8 +409,8 @@ WebInspector.AuditRules.UnusedCssRule.prototype = {
                         continue;
 
                     var resource = WebInspector.resourceForURL(styleSheet.sourceURL);
-                    var isInlineBlock = resource && resource.request && resource.request.type == WebInspector.resourceTypes.Document;
-                    var url = !isInlineBlock ? WebInspector.AuditRuleResult.linkifyDisplayName(styleSheet.sourceURL) : String.sprintf("Inline block #%d", ++inlineBlockOrdinal);
+                    var isInlineBlock = resource && resource.request && resource.request.type === WebInspector.resourceTypes.Document;
+                    var url = !isInlineBlock ? WebInspector.AuditRuleResult.linkifyDisplayName(styleSheet.sourceURL) : WebInspector.UIString("Inline block #%d", ++inlineBlockOrdinal);
                     var pctUnused = Math.round(100 * unusedRules.length / styleSheet.rules.length);
                     if (!summary)
                         summary = result.addChild("", true);
@@ -401,64 +426,129 @@ WebInspector.AuditRules.UnusedCssRule.prototype = {
                     return callback(null);
 
                 var totalUnusedPercent = Math.round(100 * totalUnusedStylesheetSize / totalStylesheetSize);
-                summary.value = String.sprintf("%s rules (%d%) of CSS not used by the current page.", totalUnusedStylesheetSize, totalUnusedPercent);
+                summary.value = WebInspector.UIString("%s rules (%d%) of CSS not used by the current page.", totalUnusedStylesheetSize, totalUnusedPercent);
 
                 callback(result);
             }
 
-            var foundSelectors = {};
-            function queryCallback(boundSelectorsCallback, selector, styleSheets, testedSelectors, nodeId)
+            /**
+             * @param {?function()} boundSelectorsCallback
+             * @param {string} selector
+             * @param {?DOMAgent.NodeId} nodeId
+             */
+            function queryCallback(boundSelectorsCallback, selector, nodeId)
             {
                 if (nodeId)
                     foundSelectors[selector] = true;
                 if (boundSelectorsCallback)
-                    boundSelectorsCallback(foundSelectors);
+                    boundSelectorsCallback();
             }
 
+            /**
+             * @param {!Array.<string>} selectors
+             * @param {!WebInspector.DOMDocument} document
+             */
             function documentLoaded(selectors, document) {
                 var pseudoSelectorRegexp = /::?(?:[\w-]+)(?:\(.*?\))?/g;
+                if (!selectors.length) {
+                    selectorsCallback([]);
+                    return;
+                }
                 for (var i = 0; i < selectors.length; ++i) {
                     if (progress.isCanceled())
                         return;
                     var effectiveSelector = selectors[i].replace(pseudoSelectorRegexp, "");
-                    WebInspector.domAgent.querySelector(document.id, effectiveSelector, queryCallback.bind(null, i === selectors.length - 1 ? selectorsCallback.bind(null, callback, styleSheets, testedSelectors) : null, selectors[i], styleSheets, testedSelectors));
+                    WebInspector.domAgent.querySelector(document.id, effectiveSelector, queryCallback.bind(null, i === selectors.length - 1 ? selectorsCallback.bind(null, styleSheets) : null, selectors[i]));
                 }
             }
 
             WebInspector.domAgent.requestDocument(documentLoaded.bind(null, selectors));
         }
 
-        function styleSheetCallback(styleSheets, sourceURL, continuation, styleSheet)
-        {
-            if (progress.isCanceled())
-                return;
-
-            if (styleSheet) {
-                styleSheet.sourceURL = sourceURL;
-                styleSheets.push(styleSheet);
-            }
-            if (continuation)
-                continuation(styleSheets);
+        var styleSheetInfos = WebInspector.cssModel.allStyleSheets();
+        if (!styleSheetInfos || !styleSheetInfos.length) {
+            evalCallback([]);
+            return;
         }
-
-        function allStylesCallback(error, styleSheetInfos)
-        {
-            if (progress.isCanceled())
-                return;
-
-            if (error || !styleSheetInfos || !styleSheetInfos.length)
-                return evalCallback([]);
-            var styleSheets = [];
-            for (var i = 0; i < styleSheetInfos.length; ++i) {
-                var info = styleSheetInfos[i];
-                WebInspector.CSSStyleSheet.createForId(info.styleSheetId, styleSheetCallback.bind(null, styleSheets, info.sourceURL, i == styleSheetInfos.length - 1 ? evalCallback : null));
-            }
-        }
-
-        CSSAgent.getAllStyleSheets(allStylesCallback);
+        var styleSheetProcessor = new WebInspector.AuditRules.StyleSheetProcessor(styleSheetInfos, progress, evalCallback);
+        styleSheetProcessor.run();
     },
 
     __proto__: WebInspector.AuditRule.prototype
+}
+
+/**
+ * @typedef {!{sourceURL: string, rules: !Array.<!WebInspector.CSSParser.StyleRule>}}
+ */
+WebInspector.AuditRules.ParsedStyleSheet;
+
+/**
+ * @constructor
+ * @param {!Array.<!WebInspector.CSSStyleSheetHeader>} styleSheetHeaders
+ * @param {!WebInspector.Progress} progress
+ * @param {!function(!Array.<!WebInspector.AuditRules.ParsedStyleSheet>)} styleSheetsParsedCallback
+ */
+WebInspector.AuditRules.StyleSheetProcessor = function(styleSheetHeaders, progress, styleSheetsParsedCallback)
+{
+    this._styleSheetHeaders = styleSheetHeaders;
+    this._progress = progress;
+    this._styleSheets = [];
+    this._styleSheetsParsedCallback = styleSheetsParsedCallback;
+}
+
+WebInspector.AuditRules.StyleSheetProcessor.prototype = {
+    run: function()
+    {
+        this._parser = new WebInspector.CSSParser();
+        this._processNextStyleSheet();
+    },
+
+    _terminateWorker: function()
+    {
+        if (this._parser) {
+            this._parser.dispose();
+            delete this._parser;
+        }
+    },
+
+    _finish: function()
+    {
+        this._terminateWorker();
+        this._styleSheetsParsedCallback(this._styleSheets);
+    },
+
+    _processNextStyleSheet: function()
+    {
+        if (!this._styleSheetHeaders.length) {
+            this._finish();
+            return;
+        }
+        this._currentStyleSheetHeader = this._styleSheetHeaders.shift();
+        this._parser.fetchAndParse(this._currentStyleSheetHeader, this._onStyleSheetParsed.bind(this));
+    },
+
+    /**
+     * @param {!Array.<!WebInspector.CSSParser.Rule>} rules
+     */
+    _onStyleSheetParsed: function(rules)
+    {
+        if (this._progress.isCanceled()) {
+            this._terminateWorker();
+            return;
+        }
+
+        var styleRules = [];
+        for (var i = 0; i < rules.length; ++i) {
+            var rule = rules[i];
+            if (rule.selectorText)
+                styleRules.push(rule);
+        }
+        this._styleSheets.push({
+            sourceURL: this._currentStyleSheetHeader.sourceURL,
+            rules: styleRules
+        });
+        this._processNextStyleSheet();
+    },
 }
 
 /**
@@ -476,7 +566,7 @@ WebInspector.AuditRules.CacheControlRule.prototype = {
     /**
      * @param {!Array.<!WebInspector.NetworkRequest>} requests
      * @param {!WebInspector.AuditRuleResult} result
-     * @param {function(WebInspector.AuditRuleResult)} callback
+     * @param {function(!WebInspector.AuditRuleResult)} callback
      * @param {!WebInspector.Progress} progress
      */
     doRun: function(requests, result, callback, progress)
@@ -523,6 +613,11 @@ WebInspector.AuditRules.CacheControlRule.prototype = {
         }
     },
 
+    /**
+     * @param {!WebInspector.NetworkRequest} request
+     * @param {number} timeMs
+     * @return {boolean}
+     */
     freshnessLifetimeGreaterThan: function(request, timeMs)
     {
         var dateHeader = this.responseHeader(request, "Date");
@@ -550,21 +645,39 @@ WebInspector.AuditRules.CacheControlRule.prototype = {
         return (isNaN(freshnessLifetimeMs)) ? false : freshnessLifetimeMs > timeMs;
     },
 
+    /**
+     * @param {!WebInspector.NetworkRequest} request
+     * @param {string} header
+     * @return {string|undefined}
+     */
     responseHeader: function(request, header)
     {
         return request.responseHeaderValue(header);
     },
 
+    /**
+     * @param {!WebInspector.NetworkRequest} request
+     * @param {string} header
+     * @return {boolean}
+     */
     hasResponseHeader: function(request, header)
     {
         return request.responseHeaderValue(header) !== undefined;
     },
 
+    /**
+     * @param {!WebInspector.NetworkRequest} request
+     * @return {boolean}
+     */
     isCompressible: function(request)
     {
         return request.type.isTextType();
     },
 
+    /**
+     * @param {!WebInspector.NetworkRequest} request
+     * @return {boolean}
+     */
     isPubliclyCacheable: function(request)
     {
         if (this._isExplicitlyNonCacheable(request))
@@ -573,32 +686,50 @@ WebInspector.AuditRules.CacheControlRule.prototype = {
         if (this.responseHeaderMatch(request, "Cache-Control", "public"))
             return true;
 
-        return request.url.indexOf("?") == -1 && !this.responseHeaderMatch(request, "Cache-Control", "private");
+        return request.url.indexOf("?") === -1 && !this.responseHeaderMatch(request, "Cache-Control", "private");
     },
 
+    /**
+     * @param {!WebInspector.NetworkRequest} request
+     * @param {string} header
+     * @param {string} regexp
+     * @return {?Array.<string>}
+     */
     responseHeaderMatch: function(request, header, regexp)
     {
         return request.responseHeaderValue(header)
             ? request.responseHeaderValue(header).match(new RegExp(regexp, "im"))
-            : undefined;
+            : null;
     },
 
+    /**
+     * @param {!WebInspector.NetworkRequest} request
+     * @return {boolean}
+     */
     hasExplicitExpiration: function(request)
     {
         return this.hasResponseHeader(request, "Date") &&
-            (this.hasResponseHeader(request, "Expires") || this.responseHeaderMatch(request, "Cache-Control", "max-age"));
+            (this.hasResponseHeader(request, "Expires") || !!this.responseHeaderMatch(request, "Cache-Control", "max-age"));
     },
 
+    /**
+     * @param {!WebInspector.NetworkRequest} request
+     * @return {boolean}
+     */
     _isExplicitlyNonCacheable: function(request)
     {
         var hasExplicitExp = this.hasExplicitExpiration(request);
-        return this.responseHeaderMatch(request, "Cache-Control", "(no-cache|no-store|must-revalidate)") ||
-            this.responseHeaderMatch(request, "Pragma", "no-cache") ||
+        return !!this.responseHeaderMatch(request, "Cache-Control", "(no-cache|no-store|must-revalidate)") ||
+            !!this.responseHeaderMatch(request, "Pragma", "no-cache") ||
             (hasExplicitExp && !this.freshnessLifetimeGreaterThan(request, 0)) ||
-            (!hasExplicitExp && request.url && request.url.indexOf("?") >= 0) ||
+            (!hasExplicitExp && !!request.url && request.url.indexOf("?") >= 0) ||
             (!hasExplicitExp && !this.isCacheableResource(request));
     },
 
+    /**
+     * @param {!WebInspector.NetworkRequest} request
+     * @return {boolean}
+     */
     isCacheableResource: function(request)
     {
         return request.statusCode !== undefined && WebInspector.AuditRules.CacheableResponseCodes[request.statusCode];
@@ -613,14 +744,14 @@ WebInspector.AuditRules.CacheControlRule.prototype = {
  */
 WebInspector.AuditRules.BrowserCacheControlRule = function()
 {
-    WebInspector.AuditRules.CacheControlRule.call(this, "http-browsercache", "Leverage browser caching");
+    WebInspector.AuditRules.CacheControlRule.call(this, "http-browsercache", WebInspector.UIString("Leverage browser caching"));
 }
 
 WebInspector.AuditRules.BrowserCacheControlRule.prototype = {
     handleNonCacheableResources: function(requests, result)
     {
         if (requests.length) {
-            var entry = result.addChild("The following resources are explicitly non-cacheable. Consider making them cacheable if possible:", true);
+            var entry = result.addChild(WebInspector.UIString("The following resources are explicitly non-cacheable. Consider making them cacheable if possible:"), true);
             result.violationCount += requests.length;
             for (var i = 0; i < requests.length; ++i)
                 entry.addURL(requests[i].url);
@@ -629,15 +760,15 @@ WebInspector.AuditRules.BrowserCacheControlRule.prototype = {
 
     runChecks: function(requests, result, callback)
     {
-        this.execCheck("The following resources are missing a cache expiration. Resources that do not specify an expiration may not be cached by browsers:",
+        this.execCheck(WebInspector.UIString("The following resources are missing a cache expiration. Resources that do not specify an expiration may not be cached by browsers:"),
             this._missingExpirationCheck, requests, result);
-        this.execCheck("The following resources specify a \"Vary\" header that disables caching in most versions of Internet Explorer:",
+        this.execCheck(WebInspector.UIString("The following resources specify a \"Vary\" header that disables caching in most versions of Internet Explorer:"),
             this._varyCheck, requests, result);
-        this.execCheck("The following cacheable resources have a short freshness lifetime:",
+        this.execCheck(WebInspector.UIString("The following cacheable resources have a short freshness lifetime:"),
             this._oneMonthExpirationCheck, requests, result);
 
         // Unable to implement the favicon check due to the WebKit limitations.
-        this.execCheck("To further improve cache hit rate, specify an expiration one year in the future for the following cacheable resources:",
+        this.execCheck(WebInspector.UIString("To further improve cache hit rate, specify an expiration one year in the future for the following cacheable resources:"),
             this._oneYearExpirationCheck, requests, result);
     },
 
@@ -681,17 +812,17 @@ WebInspector.AuditRules.BrowserCacheControlRule.prototype = {
  * @extends {WebInspector.AuditRules.CacheControlRule}
  */
 WebInspector.AuditRules.ProxyCacheControlRule = function() {
-    WebInspector.AuditRules.CacheControlRule.call(this, "http-proxycache", "Leverage proxy caching");
+    WebInspector.AuditRules.CacheControlRule.call(this, "http-proxycache", WebInspector.UIString("Leverage proxy caching"));
 }
 
 WebInspector.AuditRules.ProxyCacheControlRule.prototype = {
     runChecks: function(requests, result, callback)
     {
-        this.execCheck("Resources with a \"?\" in the URL are not cached by most proxy caching servers:",
+        this.execCheck(WebInspector.UIString("Resources with a \"?\" in the URL are not cached by most proxy caching servers:"),
             this._questionMarkCheck, requests, result);
-        this.execCheck("Consider adding a \"Cache-Control: public\" header to the following resources:",
+        this.execCheck(WebInspector.UIString("Consider adding a \"Cache-Control: public\" header to the following resources:"),
             this._publicCachingCheck, requests, result);
-        this.execCheck("The following publicly cacheable resources contain a Set-Cookie header. This security vulnerability can cause cookies to be shared by multiple users.",
+        this.execCheck(WebInspector.UIString("The following publicly cacheable resources contain a Set-Cookie header. This security vulnerability can cause cookies to be shared by multiple users."),
             this._setCookieCacheableCheck, requests, result);
     },
 
@@ -722,14 +853,14 @@ WebInspector.AuditRules.ProxyCacheControlRule.prototype = {
  */
 WebInspector.AuditRules.ImageDimensionsRule = function()
 {
-    WebInspector.AuditRule.call(this, "page-imagedims", "Specify image dimensions");
+    WebInspector.AuditRule.call(this, "page-imagedims", WebInspector.UIString("Specify image dimensions"));
 }
 
 WebInspector.AuditRules.ImageDimensionsRule.prototype = {
     /**
      * @param {!Array.<!WebInspector.NetworkRequest>} requests
      * @param {!WebInspector.AuditRuleResult} result
-     * @param {function(WebInspector.AuditRuleResult)} callback
+     * @param {function(?WebInspector.AuditRuleResult)} callback
      * @param {!WebInspector.Progress} progress
      */
     doRun: function(requests, result, callback, progress)
@@ -739,7 +870,7 @@ WebInspector.AuditRules.ImageDimensionsRule.prototype = {
         function doneCallback()
         {
             for (var url in urlToNoDimensionCount) {
-                var entry = entry || result.addChild("A width and height should be specified for all images in order to speed up page display. The following image(s) are missing a width and/or height:", true);
+                var entry = entry || result.addChild(WebInspector.UIString("A width and height should be specified for all images in order to speed up page display. The following image(s) are missing a width and/or height:"), true);
                 var format = "%r";
                 if (urlToNoDimensionCount[url] > 1)
                     format += " (%d uses)";
@@ -805,6 +936,9 @@ WebInspector.AuditRules.ImageDimensionsRule.prototype = {
                 doneCallback();
         }
 
+        /**
+         * @param {!Array.<!DOMAgent.NodeId>=} nodeIds
+         */
         function getStyles(nodeIds)
         {
             if (progress.isCanceled())
@@ -854,14 +988,14 @@ WebInspector.AuditRules.ImageDimensionsRule.prototype = {
  */
 WebInspector.AuditRules.CssInHeadRule = function()
 {
-    WebInspector.AuditRule.call(this, "page-cssinhead", "Put CSS in the document head");
+    WebInspector.AuditRule.call(this, "page-cssinhead", WebInspector.UIString("Put CSS in the document head"));
 }
 
 WebInspector.AuditRules.CssInHeadRule.prototype = {
     /**
      * @param {!Array.<!WebInspector.NetworkRequest>} requests
      * @param {!WebInspector.AuditRuleResult} result
-     * @param {function(WebInspector.AuditRuleResult)} callback
+     * @param {function(?WebInspector.AuditRuleResult)} callback
      * @param {!WebInspector.Progress} progress
      */
     doRun: function(requests, result, callback, progress)
@@ -887,10 +1021,13 @@ WebInspector.AuditRules.CssInHeadRule.prototype = {
                     result.addFormatted("Link node %r should be moved to the document head in %r", urlViolations[1][i], url);
                 result.violationCount += urlViolations[1].length;
             }
-            summary.value = String.sprintf("CSS in the document body adversely impacts rendering performance.");
+            summary.value = WebInspector.UIString("CSS in the document body adversely impacts rendering performance.");
             callback(result);
         }
 
+        /**
+         * @param {!Array.<!DOMAgent.NodeId>=} nodeIds
+         */
         function externalStylesheetsReceived(root, inlineStyleNodeIds, nodeIds)
         {
             if (progress.isCanceled())
@@ -914,6 +1051,9 @@ WebInspector.AuditRules.CssInHeadRule.prototype = {
             evalCallback(result);
         }
 
+        /**
+         * @param {!Array.<!DOMAgent.NodeId>=} nodeIds
+         */
         function inlineStylesReceived(root, nodeIds)
         {
             if (progress.isCanceled())
@@ -944,14 +1084,14 @@ WebInspector.AuditRules.CssInHeadRule.prototype = {
  */
 WebInspector.AuditRules.StylesScriptsOrderRule = function()
 {
-    WebInspector.AuditRule.call(this, "page-stylescriptorder", "Optimize the order of styles and scripts");
+    WebInspector.AuditRule.call(this, "page-stylescriptorder", WebInspector.UIString("Optimize the order of styles and scripts"));
 }
 
 WebInspector.AuditRules.StylesScriptsOrderRule.prototype = {
     /**
      * @param {!Array.<!WebInspector.NetworkRequest>} requests
      * @param {!WebInspector.AuditRuleResult} result
-     * @param {function(WebInspector.AuditRuleResult)} callback
+     * @param {function(?WebInspector.AuditRuleResult)} callback
      * @param {!WebInspector.Progress} progress
      */
     doRun: function(requests, result, callback, progress)
@@ -968,18 +1108,22 @@ WebInspector.AuditRules.StylesScriptsOrderRule.prototype = {
             var cssBeforeInlineCount = resultValue[1];
 
             if (lateCssUrls.length) {
-                var entry = result.addChild("The following external CSS files were included after an external JavaScript file in the document head. To ensure CSS files are downloaded in parallel, always include external CSS before external JavaScript.", true);
+                var entry = result.addChild(WebInspector.UIString("The following external CSS files were included after an external JavaScript file in the document head. To ensure CSS files are downloaded in parallel, always include external CSS before external JavaScript."), true);
                 entry.addURLs(lateCssUrls);
                 result.violationCount += lateCssUrls.length;
             }
 
             if (cssBeforeInlineCount) {
-                result.addChild(String.sprintf(" %d inline script block%s found in the head between an external CSS file and another resource. To allow parallel downloading, move the inline script before the external CSS file, or after the next resource.", cssBeforeInlineCount, cssBeforeInlineCount > 1 ? "s were" : " was"));
+                result.addChild(WebInspector.UIString(" %d inline script block%s found in the head between an external CSS file and another resource. To allow parallel downloading, move the inline script before the external CSS file, or after the next resource.", cssBeforeInlineCount, cssBeforeInlineCount > 1 ? "s were" : " was"));
                 result.violationCount += cssBeforeInlineCount;
             }
             callback(result);
         }
 
+        /**
+         * @param {!Array.<!DOMAgent.NodeId>} lateStyleIds
+         * @param {!Array.<!DOMAgent.NodeId>=} nodeIds
+         */
         function cssBeforeInlineReceived(lateStyleIds, nodeIds)
         {
             if (progress.isCanceled())
@@ -1003,6 +1147,10 @@ WebInspector.AuditRules.StylesScriptsOrderRule.prototype = {
             evalCallback(result);
         }
 
+        /**
+         * @param {!WebInspector.DOMDocument} root
+         * @param {!Array.<!DOMAgent.NodeId>=} nodeIds
+         */
         function lateStylesReceived(root, nodeIds)
         {
             if (progress.isCanceled())
@@ -1014,6 +1162,9 @@ WebInspector.AuditRules.StylesScriptsOrderRule.prototype = {
             WebInspector.domAgent.querySelectorAll(root.id, "head link[rel~='stylesheet'][href] ~ script:not([src])", cssBeforeInlineReceived.bind(null, nodeIds));
         }
 
+        /**
+         * @param {!WebInspector.DOMDocument} root
+         */
         function onDocumentAvailable(root)
         {
             if (progress.isCanceled())
@@ -1041,92 +1192,113 @@ WebInspector.AuditRules.CSSRuleBase.prototype = {
     /**
      * @param {!Array.<!WebInspector.NetworkRequest>} requests
      * @param {!WebInspector.AuditRuleResult} result
-     * @param {function(WebInspector.AuditRuleResult)} callback
+     * @param {function(?WebInspector.AuditRuleResult)} callback
      * @param {!WebInspector.Progress} progress
      */
     doRun: function(requests, result, callback, progress)
     {
-        CSSAgent.getAllStyleSheets(sheetsCallback.bind(this));
+        var headers = WebInspector.cssModel.allStyleSheets();
 
-        function sheetsCallback(error, headers)
-        {
-            if (error)
-                return callback(null);
-
-            if (!headers.length)
-                return callback(null);
-            for (var i = 0; i < headers.length; ++i) {
-                var header = headers[i];
-                if (header.disabled)
-                    continue; // Do not check disabled stylesheets.
-
-                this._visitStyleSheet(header.styleSheetId, i === headers.length - 1 ? finishedCallback : null, result, progress);
-            }
+        if (!headers.length) {
+            callback(null);
+            return;
+        }
+        var activeHeaders = []
+        for (var i = 0; i < headers.length; ++i) {
+            if (!headers[i].disabled)
+                activeHeaders.push(headers[i]);
         }
 
-        function finishedCallback()
-        {
-            callback(result);
-        }
+        var styleSheetProcessor = new WebInspector.AuditRules.StyleSheetProcessor(activeHeaders, progress, this._styleSheetsLoaded.bind(this, result, callback, progress));
+        styleSheetProcessor.run();
     },
 
-    _visitStyleSheet: function(styleSheetId, callback, result, progress)
+    /**
+     * @param {!WebInspector.AuditRuleResult} result
+     * @param {function(!WebInspector.AuditRuleResult)} callback
+     * @param {!WebInspector.Progress} progress
+     * @param {!Array.<!WebInspector.AuditRules.ParsedStyleSheet>} styleSheets
+     */
+    _styleSheetsLoaded: function(result, callback, progress, styleSheets)
     {
-        WebInspector.CSSStyleSheet.createForId(styleSheetId, sheetCallback.bind(this));
-
-        function sheetCallback(styleSheet)
-        {
-            if (progress.isCanceled())
-                return;
-
-            if (!styleSheet) {
-                if (callback)
-                    callback();
-                return;
-            }
-
-            this.visitStyleSheet(styleSheet, result);
-
-            for (var i = 0; i < styleSheet.rules.length; ++i)
-                this._visitRule(styleSheet, styleSheet.rules[i], result);
-
-            this.didVisitStyleSheet(styleSheet, result);
-
-            if (callback)
-                callback();
-        }
+        for (var i = 0; i < styleSheets.length; ++i)
+            this._visitStyleSheet(styleSheets[i], result);
+        callback(result);
     },
 
+    /**
+     * @param {!WebInspector.AuditRules.ParsedStyleSheet} styleSheet
+     * @param {!WebInspector.AuditRuleResult} result
+     */
+    _visitStyleSheet: function(styleSheet, result)
+    {
+        this.visitStyleSheet(styleSheet, result);
+
+        for (var i = 0; i < styleSheet.rules.length; ++i)
+            this._visitRule(styleSheet, styleSheet.rules[i], result);
+
+        this.didVisitStyleSheet(styleSheet, result);
+    },
+
+    /**
+     * @param {!WebInspector.AuditRules.ParsedStyleSheet} styleSheet
+     * @param {!WebInspector.CSSParser.StyleRule} rule
+     * @param {!WebInspector.AuditRuleResult} result
+     */
     _visitRule: function(styleSheet, rule, result)
     {
         this.visitRule(styleSheet, rule, result);
-        var allProperties = rule.style.allProperties;
+        var allProperties = rule.properties;
         for (var i = 0; i < allProperties.length; ++i)
-            this.visitProperty(styleSheet, allProperties[i], result);
+            this.visitProperty(styleSheet, rule, allProperties[i], result);
         this.didVisitRule(styleSheet, rule, result);
     },
 
+    /**
+     * @param {!WebInspector.AuditRules.ParsedStyleSheet} styleSheet
+     * @param {!WebInspector.AuditRuleResult} result
+     */
     visitStyleSheet: function(styleSheet, result)
     {
         // Subclasses can implement.
     },
 
+    /**
+     * @param {!WebInspector.AuditRules.ParsedStyleSheet} styleSheet
+     * @param {!WebInspector.AuditRuleResult} result
+     */
     didVisitStyleSheet: function(styleSheet, result)
     {
         // Subclasses can implement.
     },
-    
+
+    /**
+     * @param {!WebInspector.AuditRules.ParsedStyleSheet} styleSheet
+     * @param {!WebInspector.CSSParser.StyleRule} rule
+     * @param {!WebInspector.AuditRuleResult} result
+     */
     visitRule: function(styleSheet, rule, result)
     {
         // Subclasses can implement.
     },
 
+    /**
+     * @param {!WebInspector.AuditRules.ParsedStyleSheet} styleSheet
+     * @param {!WebInspector.CSSParser.StyleRule} rule
+     * @param {!WebInspector.AuditRuleResult} result
+     */
     didVisitRule: function(styleSheet, rule, result)
     {
         // Subclasses can implement.
     },
-    
-    visitProperty: function(styleSheet, property, result)
+
+    /**
+     * @param {!WebInspector.AuditRules.ParsedStyleSheet} styleSheet
+     * @param {!WebInspector.CSSParser.StyleRule} rule
+     * @param {!WebInspector.CSSParser.Property} property
+     * @param {!WebInspector.AuditRuleResult} result
+     */
+    visitProperty: function(styleSheet, rule, property, result)
     {
         // Subclasses can implement.
     },
@@ -1140,7 +1312,7 @@ WebInspector.AuditRules.CSSRuleBase.prototype = {
  */
 WebInspector.AuditRules.VendorPrefixedCSSProperties = function()
 {
-    WebInspector.AuditRules.CSSRuleBase.call(this, "page-vendorprefixedcss", "Use normal CSS property names instead of vendor-prefixed ones");
+    WebInspector.AuditRules.CSSRuleBase.call(this, "page-vendorprefixedcss", WebInspector.UIString("Use normal CSS property names instead of vendor-prefixed ones"));
     this._webkitPrefix = "-webkit-";
 }
 
@@ -1151,11 +1323,17 @@ WebInspector.AuditRules.VendorPrefixedCSSProperties.supportedProperties = [
 ].keySet();
 
 WebInspector.AuditRules.VendorPrefixedCSSProperties.prototype = {
+    /**
+     * @param {!WebInspector.AuditRules.ParsedStyleSheet} styleSheet
+     */
     didVisitStyleSheet: function(styleSheet)
     {
         delete this._styleSheetResult;
     },
 
+    /**
+     * @param {!WebInspector.CSSParser.StyleRule} rule
+     */
     visitRule: function(rule)
     {
         this._mentionedProperties = {};
@@ -1167,30 +1345,29 @@ WebInspector.AuditRules.VendorPrefixedCSSProperties.prototype = {
         delete this._mentionedProperties;
     },
 
-    visitProperty: function(styleSheet, property, result)
+    /**
+     * @param {!WebInspector.AuditRules.ParsedStyleSheet} styleSheet
+     * @param {!WebInspector.CSSParser.StyleRule} rule
+     * @param {!WebInspector.CSSParser.Property} property
+     * @param {!WebInspector.AuditRuleResult} result
+     */
+    visitProperty: function(styleSheet, rule, property, result)
     {
         if (!property.name.startsWith(this._webkitPrefix))
             return;
 
         var normalPropertyName = property.name.substring(this._webkitPrefix.length).toLowerCase(); // Start just after the "-webkit-" prefix.
         if (WebInspector.AuditRules.VendorPrefixedCSSProperties.supportedProperties[normalPropertyName] && !this._mentionedProperties[normalPropertyName]) {
-            var style = property.ownerStyle;
-            var liveProperty = style.getLiveProperty(normalPropertyName);
-            if (liveProperty && !liveProperty.styleBased)
-                return; // WebCore can provide normal versions of prefixed properties automatically, so be careful to skip only normal source-based properties.
-
-            var rule = style.parentRule;
             this._mentionedProperties[normalPropertyName] = true;
             if (!this._styleSheetResult)
-                this._styleSheetResult = result.addChild(rule.sourceURL ? WebInspector.linkifyResourceAsNode(rule.sourceURL) : "<unknown>");
+                this._styleSheetResult = result.addChild(styleSheet.sourceURL ? WebInspector.linkifyResourceAsNode(styleSheet.sourceURL) : WebInspector.UIString("<unknown>"));
             if (!this._ruleResult) {
-                var anchor = WebInspector.linkifyURLAsNode(rule.sourceURL, rule.selectorText);
-                anchor.preferredPanel = "resources";
-                anchor.lineNumber = rule.lineNumberInSource();
+                var anchor = WebInspector.linkifyURLAsNode(styleSheet.sourceURL, rule.selectorText);
+                anchor.lineNumber = rule.lineNumber;
                 this._ruleResult = this._styleSheetResult.addChild(anchor);
             }
             ++result.violationCount;
-            this._ruleResult.addSnippet(String.sprintf("\"" + this._webkitPrefix + "%s\" is used, but \"%s\" is supported.", normalPropertyName, normalPropertyName));
+            this._ruleResult.addSnippet(WebInspector.UIString("\"%s%s\" is used, but \"%s\" is supported.", this._webkitPrefix, normalPropertyName, normalPropertyName));
         }
     },
 
@@ -1210,7 +1387,7 @@ WebInspector.AuditRules.CookieRuleBase.prototype = {
     /**
      * @param {!Array.<!WebInspector.NetworkRequest>} requests
      * @param {!WebInspector.AuditRuleResult} result
-     * @param {function(WebInspector.AuditRuleResult)} callback
+     * @param {function(!WebInspector.AuditRuleResult)} callback
      * @param {!WebInspector.Progress} progress
      */
     doRun: function(requests, result, callback, progress)
@@ -1256,7 +1433,7 @@ WebInspector.AuditRules.CookieRuleBase.prototype = {
  */
 WebInspector.AuditRules.CookieSizeRule = function(avgBytesThreshold)
 {
-    WebInspector.AuditRules.CookieRuleBase.call(this, "http-cookiesize", "Minimize cookie size");
+    WebInspector.AuditRules.CookieRuleBase.call(this, "http-cookiesize", WebInspector.UIString("Minimize cookie size"));
     this._avgBytesThreshold = avgBytesThreshold;
     this._maxBytesThreshold = 1000;
 }
@@ -1340,17 +1517,17 @@ WebInspector.AuditRules.CookieSizeRule.prototype = {
             if (avgCookieSize > this._avgBytesThreshold && avgCookieSize < this._maxBytesThreshold)
                 bigAvgCookieDomains.push(WebInspector.AuditRuleResult.resourceDomain(domain) + ": " + Number.bytesToString(avgCookieSize));
         }
-        result.addChild(String.sprintf("The average cookie size for all requests on this page is %s", Number.bytesToString(avgAllCookiesSize)));
+        result.addChild(WebInspector.UIString("The average cookie size for all requests on this page is %s", Number.bytesToString(avgAllCookiesSize)));
 
         var message;
         if (hugeCookieDomains.length) {
-            var entry = result.addChild("The following domains have a cookie size in excess of 1KB. This is harmful because requests with cookies larger than 1KB typically cannot fit into a single network packet.", true);
+            var entry = result.addChild(WebInspector.UIString("The following domains have a cookie size in excess of 1KB. This is harmful because requests with cookies larger than 1KB typically cannot fit into a single network packet."), true);
             entry.addURLs(hugeCookieDomains);
             result.violationCount += hugeCookieDomains.length;
         }
 
         if (bigAvgCookieDomains.length) {
-            var entry = result.addChild(String.sprintf("The following domains have an average cookie size in excess of %d bytes. Reducing the size of cookies for these domains can reduce the time it takes to send requests.", this._avgBytesThreshold), true);
+            var entry = result.addChild(WebInspector.UIString("The following domains have an average cookie size in excess of %d bytes. Reducing the size of cookies for these domains can reduce the time it takes to send requests.", this._avgBytesThreshold), true);
             entry.addURLs(bigAvgCookieDomains);
             result.violationCount += bigAvgCookieDomains.length;
         }
@@ -1365,7 +1542,7 @@ WebInspector.AuditRules.CookieSizeRule.prototype = {
  */
 WebInspector.AuditRules.StaticCookielessRule = function(minResources)
 {
-    WebInspector.AuditRules.CookieRuleBase.call(this, "http-staticcookieless", "Serve static content from a cookieless domain");
+    WebInspector.AuditRules.CookieRuleBase.call(this, "http-staticcookieless", WebInspector.UIString("Serve static content from a cookieless domain"));
     this._minResources = minResources;
 }
 
@@ -1393,7 +1570,7 @@ WebInspector.AuditRules.StaticCookielessRule.prototype = {
         if (badUrls.length < this._minResources)
             return;
 
-        var entry = result.addChild(String.sprintf("%s of cookies were sent with the following static resources. Serve these static resources from a domain that does not set cookies:", Number.bytesToString(cookieBytes)), true);
+        var entry = result.addChild(WebInspector.UIString("%s of cookies were sent with the following static resources. Serve these static resources from a domain that does not set cookies:", Number.bytesToString(cookieBytes)), true);
         entry.addURLs(badUrls);
         result.violationCount = badUrls.length;
     },

@@ -32,7 +32,7 @@
 
 /**
  * @constructor
- * @param {Array.<CSSAgent.CSSPropertyInfo|string>} properties
+ * @param {!Array.<!{name: string, longhands: !Array.<string>}|string>} properties
  */
 WebInspector.CSSMetadata = function(properties)
 {
@@ -45,7 +45,6 @@ WebInspector.CSSMetadata = function(properties)
             this._values.push(property);
             continue;
         }
-
         var propertyName = property.name;
         this._values.push(propertyName);
 
@@ -107,7 +106,9 @@ WebInspector.CSSMetadata.canonicalPropertyName = function(name)
     if (!name || name.length < 9 || name.charAt(0) !== "-")
         return name.toLowerCase();
     var match = name.match(/(?:-webkit-)(.+)/);
-    if (!match)
+    var propertiesSet = WebInspector.CSSMetadata.cssPropertiesMetainfoKeySet();
+    var hasSupportedProperties = WebInspector.CSSMetadata.cssPropertiesMetainfo._values.length > 0;
+    if (!match || (hasSupportedProperties && !propertiesSet.hasOwnProperty(match[1].toLowerCase())))
         return name.toLowerCase();
     return match[1].toLowerCase();
 }
@@ -213,6 +214,9 @@ WebInspector.CSSMetadata._propertyDataMap = {
     ] },
     "border-left-width": { values: [
         "medium", "thick", "thin"
+    ] },
+    "box-shadow": { values: [
+        "inset", "none"
     ] },
     "-webkit-writing-mode": { values: [
         "lr", "rl", "tb", "lr-tb", "rl-tb", "tb-rl", "horizontal-tb", "vertical-rl", "vertical-lr", "horizontal-bt"
@@ -429,7 +433,7 @@ WebInspector.CSSMetadata._propertyDataMap = {
         "none", "hidden", "inset", "groove", "ridge", "outset", "dotted", "dashed", "solid", "double"
     ] },
     "unicode-bidi": { values: [
-        "normal", "bidi-override", "embed"
+        "normal", "bidi-override", "embed", "isolate", "isolate-override", "plaintext"
     ] },
     "clip-rule": { values: [
         "nonzero", "evenodd"
@@ -456,7 +460,7 @@ WebInspector.CSSMetadata._propertyDataMap = {
         "hide", "show"
     ] },
     "pointer-events": { values: [
-        "none", "all", "auto", "visible", "visiblepainted", "visiblefill", "visiblestroke", "painted", "fill", "stroke"
+        "none", "all", "auto", "visible", "visiblepainted", "visiblefill", "visiblestroke", "painted", "fill", "stroke", "bounding-box"
     ] },
     "letter-spacing": { values: [
         "normal"
@@ -655,12 +659,11 @@ WebInspector.CSSMetadata._propertyDataMap = {
     "border-left": { m: "background" },
     "border-radius": { m: "background" },
     "bottom": { m: "visuren" },
-    "box-shadow": { m: "background" },
     "color": { m: "color", a: "foreground" },
     "counter-increment": { m: "generate" },
     "counter-reset": { m: "generate" },
-    "grid-definition-columns": { m: "grid" },
-    "grid-definition-rows": { m: "grid" },
+    "grid-template-columns": { m: "grid" },
+    "grid-template-rows": { m: "grid" },
     "height": { m: "box" },
     "image-orientation": { m: "images" },
     "left": { m: "visuren" },
@@ -705,7 +708,7 @@ WebInspector.CSSMetadata.keywordsForProperty = function(propertyName)
 
 /**
  * @param {string} propertyName
- * @return {Object}
+ * @return {?Object}
  */
 WebInspector.CSSMetadata.descriptor = function(propertyName)
 {
@@ -718,14 +721,9 @@ WebInspector.CSSMetadata.descriptor = function(propertyName)
     return entry || null;
 }
 
-WebInspector.CSSMetadata.requestCSSShorthandData = function()
+WebInspector.CSSMetadata.initializeWithSupportedProperties = function(properties)
 {
-    function propertyNamesCallback(error, properties)
-    {
-        if (!error)
-            WebInspector.CSSMetadata.cssPropertiesMetainfo = new WebInspector.CSSMetadata(properties);
-    }
-    CSSAgent.getSupportedCSSProperties(propertyNamesCallback);
+    WebInspector.CSSMetadata.cssPropertiesMetainfo = new WebInspector.CSSMetadata(properties);
 }
 
 WebInspector.CSSMetadata.cssPropertiesMetainfoKeySet = function()
@@ -873,7 +871,7 @@ WebInspector.CSSMetadata.prototype = {
     },
 
     /**
-     * @param {Array.<string>} properties
+     * @param {!Array.<string>} properties
      * @return {number}
      */
     mostUsedOf: function(properties)
@@ -922,6 +920,9 @@ WebInspector.CSSMetadata.prototype = {
         return foundIndex;
     },
 
+    /**
+     * @return {!Object.<string, boolean>}
+     */
     keySet: function()
     {
         if (!this._keySet)
@@ -929,16 +930,32 @@ WebInspector.CSSMetadata.prototype = {
         return this._keySet;
     },
 
+    /**
+     * @param {string} str
+     * @param {string} prefix
+     * @return {string}
+     */
     next: function(str, prefix)
     {
         return this._closest(str, prefix, 1);
     },
 
+    /**
+     * @param {string} str
+     * @param {string} prefix
+     * @return {string}
+     */
     previous: function(str, prefix)
     {
         return this._closest(str, prefix, -1);
     },
 
+    /**
+     * @param {string} str
+     * @param {string} prefix
+     * @param {number} shift
+     * @return {string}
+     */
     _closest: function(str, prefix, shift)
     {
         if (!str)
@@ -977,3 +994,5 @@ WebInspector.CSSMetadata.prototype = {
         return this._shorthands[longhand];
     }
 }
+
+WebInspector.CSSMetadata.initializeWithSupportedProperties([]);

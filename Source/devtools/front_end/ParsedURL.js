@@ -88,7 +88,7 @@ WebInspector.ParsedURL = function(url)
 
 /**
  * @param {string} url
- * @return {Array.<string>}
+ * @return {!Array.<string>}
  */
 WebInspector.ParsedURL.splitURL = function(url)
 {
@@ -232,12 +232,15 @@ WebInspector.ParsedURL.prototype = {
         if (!this._displayName && this.host)
             this._displayName = this.host + "/";
         if (!this._displayName && this.url)
-            this._displayName = this.url.trimURL(WebInspector.inspectedPageDomain ? WebInspector.inspectedPageDomain : "");
+            this._displayName = this.url.trimURL(WebInspector.inspectedPageDomain() ? WebInspector.inspectedPageDomain() : "");
         if (this._displayName === "/")
             this._displayName = this.url;
         return this._displayName;
     },
 
+    /**
+     * @return {string}
+     */
     dataURLDisplayName: function()
     {
         if (this._dataURLDisplayName)
@@ -248,11 +251,17 @@ WebInspector.ParsedURL.prototype = {
         return this._dataURLDisplayName;
     },
 
+    /**
+     * @return {boolean}
+     */
     isAboutBlank: function()
     {
         return this.url === "about:blank";
     },
 
+    /**
+     * @return {boolean}
+     */
     isDataURL: function()
     {
         return this.scheme === "data";

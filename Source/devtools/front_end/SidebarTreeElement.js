@@ -53,15 +53,12 @@ WebInspector.SidebarSectionTreeElement.prototype = {
 
         this._smallChildren = x;
 
-        if (this._smallChildren)
-            this._childrenListNode.addStyleClass("small");
-        else
-            this._childrenListNode.removeStyleClass("small");
+        this._childrenListNode.classList.toggle("small", this._smallChildren);
     },
 
     onattach: function()
     {
-        this._listItemNode.addStyleClass("sidebar-tree-section");
+        this._listItemNode.classList.add("sidebar-tree-section");
     },
 
     onreveal: function()
@@ -76,8 +73,10 @@ WebInspector.SidebarSectionTreeElement.prototype = {
 /**
  * @constructor
  * @extends {TreeElement}
+ * @param {string} className
+ * @param {string} title
  * @param {string=} subtitle
- * @param {Object=} representedObject
+ * @param {?Object=} representedObject
  * @param {boolean=} hasChildren
  */
 WebInspector.SidebarTreeElement = function(className, title, subtitle, representedObject, hasChildren)
@@ -89,24 +88,14 @@ WebInspector.SidebarTreeElement = function(className, title, subtitle, represent
         this.disclosureButton.className = "disclosure-button";
     }
 
-    if (!this.iconElement) {
-        this.iconElement = document.createElement("img");
-        this.iconElement.className = "icon";
-    }
+    this.iconElement = document.createElementWithClass("div", "icon");
+    this.statusElement = document.createElementWithClass("div", "status");
+    this.titlesElement = document.createElementWithClass("div", "titles");
 
-    this.statusElement = document.createElement("div");
-    this.statusElement.className = "status";
+    this.titleContainer = this.titlesElement.createChild("span", "title-container");
+    this.titleElement = this.titleContainer.createChild("span", "title");
 
-    this.titlesElement = document.createElement("div");
-    this.titlesElement.className = "titles";
-
-    this.titleElement = document.createElement("span");
-    this.titleElement.className = "title";
-    this.titlesElement.appendChild(this.titleElement);
-
-    this.subtitleElement = document.createElement("span");
-    this.subtitleElement.className = "subtitle";
-    this.titlesElement.appendChild(this.subtitleElement);
+    this.subtitleElement = this.titlesElement.createChild("span", "subtitle");
 
     this.className = className;
     this.mainTitle = title;
@@ -122,13 +111,8 @@ WebInspector.SidebarTreeElement.prototype = {
     set small(x)
     {
         this._small = x;
-
-        if (this._listItemNode) {
-            if (this._small)
-                this._listItemNode.addStyleClass("small");
-            else
-                this._listItemNode.removeStyleClass("small");
-        }
+        if (this._listItemNode)
+            this._listItemNode.classList.toggle("small", this._small);
     },
 
     get mainTitle()
@@ -155,10 +139,7 @@ WebInspector.SidebarTreeElement.prototype = {
 
     set wait(x)
     {
-        if (x)
-            this._listItemNode.addStyleClass("wait");
-        else
-            this._listItemNode.removeStyleClass("wait");
+        this._listItemNode.classList.toggle("wait", x);
     },
 
     refreshTitles: function()
@@ -171,13 +152,16 @@ WebInspector.SidebarTreeElement.prototype = {
         if (subtitle) {
             if (this.subtitleElement.textContent !== subtitle)
                 this.subtitleElement.textContent = subtitle;
-            this.titlesElement.removeStyleClass("no-subtitle");
+            this.titlesElement.classList.remove("no-subtitle");
         } else {
             this.subtitleElement.textContent = "";
-            this.titlesElement.addStyleClass("no-subtitle");
+            this.titlesElement.classList.add("no-subtitle");
         }
     },
 
+    /**
+     * @return {boolean}
+     */
     isEventWithinDisclosureTriangle: function(event)
     {
         return event.target === this.disclosureButton;
@@ -185,13 +169,13 @@ WebInspector.SidebarTreeElement.prototype = {
 
     onattach: function()
     {
-        this._listItemNode.addStyleClass("sidebar-tree-item");
+        this._listItemNode.classList.add("sidebar-tree-item");
 
         if (this.className)
-            this._listItemNode.addStyleClass(this.className);
+            this._listItemNode.classList.add(this.className);
 
         if (this.small)
-            this._listItemNode.addStyleClass("small");
+            this._listItemNode.classList.add("small");
 
         if (this.hasChildren && this.disclosureButton)
             this._listItemNode.appendChild(this.disclosureButton);

@@ -97,7 +97,7 @@ WebInspector.NetworkManager._MIMETypes = {
 WebInspector.NetworkManager.prototype = {
     /**
      * @param {string} url
-     * @return {WebInspector.NetworkRequest}
+     * @return {!WebInspector.NetworkRequest}
      */
     inflightRequestForURL: function(url)
     {
@@ -105,7 +105,7 @@ WebInspector.NetworkManager.prototype = {
     },
 
     /**
-     * @param {WebInspector.Event} event
+     * @param {!WebInspector.Event} event
      */
     _cacheDisabledSettingChanged: function(event)
     {
@@ -130,7 +130,7 @@ WebInspector.NetworkDispatcher = function(manager)
 
 WebInspector.NetworkDispatcher.prototype = {
     /**
-     * @param {NetworkAgent.Headers} headersMap
+     * @param {!NetworkAgent.Headers} headersMap
      * @return {!Array.<!WebInspector.NetworkRequest.NameValue>}
      */
     _headersMapToHeadersArray: function(headersMap)
@@ -145,8 +145,8 @@ WebInspector.NetworkDispatcher.prototype = {
     },
 
     /**
-     * @param {WebInspector.NetworkRequest} networkRequest
-     * @param {NetworkAgent.Request} request
+     * @param {!WebInspector.NetworkRequest} networkRequest
+     * @param {!NetworkAgent.Request} request
      */
     _updateNetworkRequestWithRequest: function(networkRequest, request)
     {
@@ -156,8 +156,8 @@ WebInspector.NetworkDispatcher.prototype = {
     },
 
     /**
-     * @param {WebInspector.NetworkRequest} networkRequest
-     * @param {NetworkAgent.Response=} response
+     * @param {!WebInspector.NetworkRequest} networkRequest
+     * @param {!NetworkAgent.Response=} response
      */
     _updateNetworkRequestWithResponse: function(networkRequest, response)
     {
@@ -170,6 +170,8 @@ WebInspector.NetworkDispatcher.prototype = {
         networkRequest.statusCode = response.status;
         networkRequest.statusText = response.statusText;
         networkRequest.responseHeaders = this._headersMapToHeadersArray(response.headers);
+        if (response.encodedDataLength >= 0)
+            networkRequest.setTransferSize(response.encodedDataLength);
         if (response.headersText)
             networkRequest.responseHeadersText = response.headersText;
         if (response.requestHeaders) {
@@ -179,6 +181,8 @@ WebInspector.NetworkDispatcher.prototype = {
 
         networkRequest.connectionReused = response.connectionReused;
         networkRequest.connectionId = response.connectionId;
+        if (response.remoteIPAddress)
+            networkRequest.setRemoteAddress(response.remoteIPAddress, response.remotePort || -1);
 
         if (response.fromDiskCache)
             networkRequest.cached = true;
@@ -186,7 +190,7 @@ WebInspector.NetworkDispatcher.prototype = {
             networkRequest.timing = response.timing;
 
         if (!this._mimeTypeIsConsistentWithType(networkRequest)) {
-            WebInspector.console.addMessage(WebInspector.ConsoleMessage.create(WebInspector.ConsoleMessage.MessageSource.Network,
+            WebInspector.console.addMessage(new WebInspector.ConsoleMessage(WebInspector.ConsoleMessage.MessageSource.Network,
                 WebInspector.ConsoleMessage.MessageLevel.Log,
                 WebInspector.UIString("Resource interpreted as %s but transferred with MIME type %s: \"%s\".", networkRequest.type.title(), networkRequest.mimeType, networkRequest.url),
                 WebInspector.ConsoleMessage.MessageType.Log,
@@ -194,14 +198,12 @@ WebInspector.NetworkDispatcher.prototype = {
                 0,
                 0,
                 1,
-                [],
-                null,
                 networkRequest.requestId));
         }
     },
 
     /**
-     * @param {WebInspector.NetworkRequest} networkRequest
+     * @param {!WebInspector.NetworkRequest} networkRequest
      * @return {boolean}
      */
     _mimeTypeIsConsistentWithType: function(networkRequest)
@@ -231,7 +233,7 @@ WebInspector.NetworkDispatcher.prototype = {
     },
 
     /**
-     * @param {NetworkAgent.Response} response
+     * @param {!NetworkAgent.Response} response
      * @return {boolean}
      */
     _isNull: function(response)
@@ -242,14 +244,14 @@ WebInspector.NetworkDispatcher.prototype = {
     },
 
     /**
-     * @param {NetworkAgent.RequestId} requestId
-     * @param {PageAgent.FrameId} frameId
-     * @param {NetworkAgent.LoaderId} loaderId
+     * @param {!NetworkAgent.RequestId} requestId
+     * @param {!PageAgent.FrameId} frameId
+     * @param {!NetworkAgent.LoaderId} loaderId
      * @param {string} documentURL
-     * @param {NetworkAgent.Request} request
-     * @param {NetworkAgent.Timestamp} time
-     * @param {NetworkAgent.Initiator} initiator
-     * @param {NetworkAgent.Response=} redirectResponse
+     * @param {!NetworkAgent.Request} request
+     * @param {!NetworkAgent.Timestamp} time
+     * @param {!NetworkAgent.Initiator} initiator
+     * @param {!NetworkAgent.Response=} redirectResponse
      */
     requestWillBeSent: function(requestId, frameId, loaderId, documentURL, request, time, initiator, redirectResponse)
     {
@@ -270,7 +272,7 @@ WebInspector.NetworkDispatcher.prototype = {
     },
 
     /**
-     * @param {NetworkAgent.RequestId} requestId
+     * @param {!NetworkAgent.RequestId} requestId
      */
     requestServedFromCache: function(requestId)
     {
@@ -282,12 +284,12 @@ WebInspector.NetworkDispatcher.prototype = {
     },
 
     /**
-     * @param {NetworkAgent.RequestId} requestId
-     * @param {PageAgent.FrameId} frameId
-     * @param {NetworkAgent.LoaderId} loaderId
-     * @param {NetworkAgent.Timestamp} time
-     * @param {PageAgent.ResourceType} resourceType
-     * @param {NetworkAgent.Response} response
+     * @param {!NetworkAgent.RequestId} requestId
+     * @param {!PageAgent.FrameId} frameId
+     * @param {!NetworkAgent.LoaderId} loaderId
+     * @param {!NetworkAgent.Timestamp} time
+     * @param {!PageAgent.ResourceType} resourceType
+     * @param {!NetworkAgent.Response} response
      */
     responseReceived: function(requestId, frameId, loaderId, time, resourceType, response)
     {
@@ -317,8 +319,8 @@ WebInspector.NetworkDispatcher.prototype = {
     },
 
     /**
-     * @param {NetworkAgent.RequestId} requestId
-     * @param {NetworkAgent.Timestamp} time
+     * @param {!NetworkAgent.RequestId} requestId
+     * @param {!NetworkAgent.Timestamp} time
      * @param {number} dataLength
      * @param {number} encodedDataLength
      */
@@ -337,20 +339,21 @@ WebInspector.NetworkDispatcher.prototype = {
     },
 
     /**
-     * @param {NetworkAgent.RequestId} requestId
-     * @param {NetworkAgent.Timestamp} finishTime
+     * @param {!NetworkAgent.RequestId} requestId
+     * @param {!NetworkAgent.Timestamp} finishTime
+     * @param {number} encodedDataLength
      */
-    loadingFinished: function(requestId, finishTime)
+    loadingFinished: function(requestId, finishTime, encodedDataLength)
     {
         var networkRequest = this._inflightRequestsById[requestId];
         if (!networkRequest)
             return;
-        this._finishNetworkRequest(networkRequest, finishTime);
+        this._finishNetworkRequest(networkRequest, finishTime, encodedDataLength);
     },
 
     /**
-     * @param {NetworkAgent.RequestId} requestId
-     * @param {NetworkAgent.Timestamp} time
+     * @param {!NetworkAgent.RequestId} requestId
+     * @param {!NetworkAgent.Timestamp} time
      * @param {string} localizedDescription
      * @param {boolean=} canceled
      */
@@ -363,11 +366,11 @@ WebInspector.NetworkDispatcher.prototype = {
         networkRequest.failed = true;
         networkRequest.canceled = canceled;
         networkRequest.localizedFailDescription = localizedDescription;
-        this._finishNetworkRequest(networkRequest, time);
+        this._finishNetworkRequest(networkRequest, time, -1);
     },
 
     /**
-     * @param {NetworkAgent.RequestId} requestId
+     * @param {!NetworkAgent.RequestId} requestId
      * @param {string} requestURL
      */
     webSocketCreated: function(requestId, requestURL)
@@ -378,9 +381,9 @@ WebInspector.NetworkDispatcher.prototype = {
     },
 
     /**
-     * @param {NetworkAgent.RequestId} requestId
-     * @param {NetworkAgent.Timestamp} time
-     * @param {NetworkAgent.WebSocketRequest} request
+     * @param {!NetworkAgent.RequestId} requestId
+     * @param {!NetworkAgent.Timestamp} time
+     * @param {!NetworkAgent.WebSocketRequest} request
      */
     webSocketWillSendHandshakeRequest: function(requestId, time, request)
     {
@@ -396,9 +399,9 @@ WebInspector.NetworkDispatcher.prototype = {
     },
 
     /**
-     * @param {NetworkAgent.RequestId} requestId
-     * @param {NetworkAgent.Timestamp} time
-     * @param {NetworkAgent.WebSocketResponse} response
+     * @param {!NetworkAgent.RequestId} requestId
+     * @param {!NetworkAgent.Timestamp} time
+     * @param {!NetworkAgent.WebSocketResponse} response
      */
     webSocketHandshakeResponseReceived: function(requestId, time, response)
     {
@@ -409,15 +412,20 @@ WebInspector.NetworkDispatcher.prototype = {
         networkRequest.statusCode = response.status;
         networkRequest.statusText = response.statusText;
         networkRequest.responseHeaders = this._headersMapToHeadersArray(response.headers);
+        networkRequest.responseHeadersText = response.headersText;
+        if (response.requestHeaders)
+            networkRequest.setRequestHeaders(this._headersMapToHeadersArray(response.requestHeaders));
+        if (response.requestHeadersText)
+            networkRequest.setRequestHeadersText(response.requestHeadersText);
         networkRequest.responseReceivedTime = time;
 
         this._updateNetworkRequest(networkRequest);
     },
 
     /**
-     * @param {NetworkAgent.RequestId} requestId
-     * @param {NetworkAgent.Timestamp} time
-     * @param {NetworkAgent.WebSocketFrame} response
+     * @param {!NetworkAgent.RequestId} requestId
+     * @param {!NetworkAgent.Timestamp} time
+     * @param {!NetworkAgent.WebSocketFrame} response
      */
     webSocketFrameReceived: function(requestId, time, response)
     {
@@ -432,9 +440,9 @@ WebInspector.NetworkDispatcher.prototype = {
     },
 
     /**
-     * @param {NetworkAgent.RequestId} requestId
-     * @param {NetworkAgent.Timestamp} time
-     * @param {NetworkAgent.WebSocketFrame} response
+     * @param {!NetworkAgent.RequestId} requestId
+     * @param {!NetworkAgent.Timestamp} time
+     * @param {!NetworkAgent.WebSocketFrame} response
      */
     webSocketFrameSent: function(requestId, time, response)
     {
@@ -449,8 +457,8 @@ WebInspector.NetworkDispatcher.prototype = {
     },
 
     /**
-     * @param {NetworkAgent.RequestId} requestId
-     * @param {NetworkAgent.Timestamp} time
+     * @param {!NetworkAgent.RequestId} requestId
+     * @param {!NetworkAgent.Timestamp} time
      * @param {string} errorMessage
      */
     webSocketFrameError: function(requestId, time, errorMessage)
@@ -466,22 +474,22 @@ WebInspector.NetworkDispatcher.prototype = {
     },
 
     /**
-     * @param {NetworkAgent.RequestId} requestId
-     * @param {NetworkAgent.Timestamp} time
+     * @param {!NetworkAgent.RequestId} requestId
+     * @param {!NetworkAgent.Timestamp} time
      */
     webSocketClosed: function(requestId, time)
     {
         var networkRequest = this._inflightRequestsById[requestId];
         if (!networkRequest)
             return;
-        this._finishNetworkRequest(networkRequest, time);
+        this._finishNetworkRequest(networkRequest, time, -1);
     },
 
     /**
-     * @param {NetworkAgent.RequestId} requestId
-     * @param {NetworkAgent.Timestamp} time
+     * @param {!NetworkAgent.RequestId} requestId
+     * @param {!NetworkAgent.Timestamp} time
      * @param {string} redirectURL
-     * @return {WebInspector.NetworkRequest}
+     * @return {!WebInspector.NetworkRequest}
      */
     _appendRedirect: function(requestId, time, redirectURL)
     {
@@ -491,7 +499,7 @@ WebInspector.NetworkDispatcher.prototype = {
         delete originalNetworkRequest.redirects;
         if (previousRedirects.length > 0)
             originalNetworkRequest.redirectSource = previousRedirects[previousRedirects.length - 1];
-        this._finishNetworkRequest(originalNetworkRequest, time);
+        this._finishNetworkRequest(originalNetworkRequest, time, -1);
         var newNetworkRequest = this._createNetworkRequest(requestId, originalNetworkRequest.frameId, originalNetworkRequest.loaderId,
              redirectURL, originalNetworkRequest.documentURL, originalNetworkRequest.initiator);
         newNetworkRequest.redirects = previousRedirects.concat(originalNetworkRequest);
@@ -499,7 +507,7 @@ WebInspector.NetworkDispatcher.prototype = {
     },
 
     /**
-     * @param {WebInspector.NetworkRequest} networkRequest
+     * @param {!WebInspector.NetworkRequest} networkRequest
      */
     _startNetworkRequest: function(networkRequest)
     {
@@ -509,7 +517,7 @@ WebInspector.NetworkDispatcher.prototype = {
     },
 
     /**
-     * @param {WebInspector.NetworkRequest} networkRequest
+     * @param {!WebInspector.NetworkRequest} networkRequest
      */
     _updateNetworkRequest: function(networkRequest)
     {
@@ -517,13 +525,16 @@ WebInspector.NetworkDispatcher.prototype = {
     },
 
     /**
-     * @param {WebInspector.NetworkRequest} networkRequest
-     * @param {NetworkAgent.Timestamp} finishTime
+     * @param {!WebInspector.NetworkRequest} networkRequest
+     * @param {!NetworkAgent.Timestamp} finishTime
+     * @param {number} encodedDataLength
      */
-    _finishNetworkRequest: function(networkRequest, finishTime)
+    _finishNetworkRequest: function(networkRequest, finishTime, encodedDataLength)
     {
         networkRequest.endTime = finishTime;
         networkRequest.finished = true;
+        if (encodedDataLength >= 0)
+            networkRequest.setTransferSize(encodedDataLength);
         this._dispatchEventToListeners(WebInspector.NetworkManager.EventTypes.RequestFinished, networkRequest);
         delete this._inflightRequestsById[networkRequest.requestId];
         delete this._inflightRequestsByURL[networkRequest.url];
@@ -531,7 +542,7 @@ WebInspector.NetworkDispatcher.prototype = {
 
     /**
      * @param {string} eventType
-     * @param {WebInspector.NetworkRequest} networkRequest
+     * @param {!WebInspector.NetworkRequest} networkRequest
      */
     _dispatchEventToListeners: function(eventType, networkRequest)
     {
@@ -539,12 +550,12 @@ WebInspector.NetworkDispatcher.prototype = {
     },
 
     /**
-     * @param {NetworkAgent.RequestId} requestId
+     * @param {!NetworkAgent.RequestId} requestId
      * @param {string} frameId
-     * @param {NetworkAgent.LoaderId} loaderId
+     * @param {!NetworkAgent.LoaderId} loaderId
      * @param {string} url
      * @param {string} documentURL
-     * @param {NetworkAgent.Initiator} initiator
+     * @param {!NetworkAgent.Initiator} initiator
      */
     _createNetworkRequest: function(requestId, frameId, loaderId, url, documentURL, initiator)
     {
@@ -555,6 +566,6 @@ WebInspector.NetworkDispatcher.prototype = {
 }
 
 /**
- * @type {?WebInspector.NetworkManager}
+ * @type {!WebInspector.NetworkManager}
  */
-WebInspector.networkManager = null;
+WebInspector.networkManager;

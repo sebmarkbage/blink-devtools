@@ -49,10 +49,10 @@ WebInspector.TextRange.createFromLocation = function(line, column)
 }
 
 /**
- * @param {Object} serializedTextRange
- * @return {WebInspector.TextRange}
+ * @param {!Object} serializedTextRange
+ * @return {!WebInspector.TextRange}
  */
-WebInspector.TextRange.fromObject = function (serializedTextRange)
+WebInspector.TextRange.fromObject = function(serializedTextRange)
 {
     return new WebInspector.TextRange(serializedTextRange.startLine, serializedTextRange.startColumn, serializedTextRange.endLine, serializedTextRange.endColumn);
 }
@@ -67,7 +67,7 @@ WebInspector.TextRange.prototype = {
     },
 
     /**
-     * @param {WebInspector.TextRange} range
+     * @param {!WebInspector.TextRange} range
      * @return {boolean}
      */
     immediatelyPrecedes: function(range)
@@ -78,7 +78,7 @@ WebInspector.TextRange.prototype = {
     },
 
     /**
-     * @param {WebInspector.TextRange} range
+     * @param {!WebInspector.TextRange} range
      * @return {boolean}
      */
     immediatelyFollows: function(range)
@@ -96,13 +96,16 @@ WebInspector.TextRange.prototype = {
         return this.endLine - this.startLine;
     },
 
+    /**
+     * @return {!WebInspector.TextRange}
+     */
     collapseToEnd: function()
     {
         return new WebInspector.TextRange(this.endLine, this.endColumn, this.endLine, this.endColumn);
     },
 
     /**
-     * @return {WebInspector.TextRange}
+     * @return {!WebInspector.TextRange}
      */
     normalize: function()
     {
@@ -113,7 +116,7 @@ WebInspector.TextRange.prototype = {
     },
 
     /**
-     * @return {WebInspector.TextRange}
+     * @return {!WebInspector.TextRange}
      */
     clone: function()
     {
@@ -121,7 +124,7 @@ WebInspector.TextRange.prototype = {
     },
 
     /**
-     * @return {Object}
+     * @return {!Object}
      */
     serializeToObject: function()
     {
@@ -134,7 +137,7 @@ WebInspector.TextRange.prototype = {
     },
 
     /**
-     * @param {WebInspector.TextRange} other
+     * @param {!WebInspector.TextRange} other
      * @return {number}
      */
     compareTo: function(other)
@@ -151,17 +154,40 @@ WebInspector.TextRange.prototype = {
     },
 
     /**
+     * @param {!WebInspector.TextRange} other
+     * @return {boolean}
+     */
+    equal: function(other)
+    {
+        return this.startLine === other.startLine && this.endLine === other.endLine &&
+            this.startColumn === other.startColumn && this.endColumn === other.endColumn;
+    },
+
+    /**
      * @param {number} lineOffset
-     * @return {WebInspector.TextRange}
+     * @return {!WebInspector.TextRange}
      */
     shift: function(lineOffset)
     {
         return new WebInspector.TextRange(this.startLine + lineOffset, this.startColumn, this.endLine + lineOffset, this.endColumn);
     },
 
+    /**
+     * @return {string}
+     */
     toString: function()
     {
         return JSON.stringify(this);
     }
 }
 
+/**
+ * @constructor
+ * @param {number} offset
+ * @param {number} length
+ */
+WebInspector.SourceRange = function(offset, length)
+{
+    this.offset = offset;
+    this.length = length;
+}

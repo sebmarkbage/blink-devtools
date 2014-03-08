@@ -31,13 +31,13 @@
 /**
  * @constructor
  * @extends {WebInspector.RequestView}
- * @param {WebInspector.NetworkRequest} request
+ * @param {!WebInspector.NetworkRequest} request
  */
 WebInspector.RequestJSONView = function(request, parsedJSON)
 {
     WebInspector.RequestView.call(this, request);
     this._parsedJSON = parsedJSON;
-    this.element.addStyleClass("json");
+    this.element.classList.add("json");
 }
 
 WebInspector.RequestJSONView.parseJSON = function(text)
@@ -78,6 +78,9 @@ WebInspector.RequestJSONView.parseJSONP = function(text)
 }
 
 WebInspector.RequestJSONView.prototype = {
+    /**
+     * @return {boolean}
+     */
     hasContent: function()
     {
         return true;

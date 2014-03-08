@@ -41,12 +41,12 @@ WebInspector.OutputStreamDelegate.prototype = {
     onTransferFinished: function() { },
 
     /**
-     * @param {WebInspector.ChunkedReader} reader
+     * @param {!WebInspector.ChunkedReader} reader
      */
     onChunkTransferred: function(reader) { },
 
     /**
-     * @param {WebInspector.ChunkedReader} reader
+     * @param {!WebInspector.ChunkedReader} reader
      */
     onError: function(reader, event) { },
 }
@@ -61,7 +61,7 @@ WebInspector.OutputStream = function()
 WebInspector.OutputStream.prototype = {
     /**
      * @param {string} data
-     * @param {function(WebInspector.OutputStream)=} callback
+     * @param {function(!WebInspector.OutputStream)=} callback
      */
     write: function(data, callback) { },
 
@@ -156,7 +156,7 @@ WebInspector.ChunkedFileReader.prototype = {
     },
 
     /**
-     * @param {Event} event
+     * @param {?Event} event
      */
     _onChunkLoaded: function(event)
     {
@@ -258,7 +258,7 @@ WebInspector.ChunkedXHRReader.prototype = {
     },
 
     /**
-     * @param {Event} event
+     * @param {?Event} event
      */
     _onProgress: function(event)
     {
@@ -280,7 +280,7 @@ WebInspector.ChunkedXHRReader.prototype = {
     },
 
     /**
-     * @param {Event} event
+     * @param {?Event} event
      */
     _onLoad: function(event)
     {
@@ -296,7 +296,7 @@ WebInspector.ChunkedXHRReader.prototype = {
 
 /**
  * @param {function(!File)} callback
- * @return {Node}
+ * @return {!Node}
  */
 WebInspector.createFileSelectorElement = function(callback) {
     var fileSelectorElement = document.createElement("input");
@@ -312,38 +312,6 @@ WebInspector.createFileSelectorElement = function(callback) {
 }
 
 /**
- * @param {string} source
- * @param {number=} startIndex
- * @param {number=} lastIndex
- */
-WebInspector.findBalancedCurlyBrackets = function(source, startIndex, lastIndex) {
-    lastIndex = lastIndex || source.length;
-    startIndex = startIndex || 0;
-    var counter = 0;
-    var inString = false;
-
-    for (var index = startIndex; index < lastIndex; ++index) {
-        var character = source[index];
-        if (inString) {
-            if (character === "\\")
-                ++index;
-            else if (character === "\"")
-                inString = false;
-        } else {
-            if (character === "\"")
-                inString = true;
-            else if (character === "{")
-                ++counter;
-            else if (character === "}") {
-                if (--counter === 0)
-                    return index + 1;
-            }
-        }
-    }
-    return -1;
-}
-
-/**
  * @constructor
  * @implements {WebInspector.OutputStream}
  */
@@ -354,26 +322,30 @@ WebInspector.FileOutputStream = function()
 WebInspector.FileOutputStream.prototype = {
     /**
      * @param {string} fileName
-     * @param {function(WebInspector.FileOutputStream, string=)} callback
+     * @param {function(boolean)} callback
      */
     open: function(fileName, callback)
     {
         this._closed = false;
         this._writeCallbacks = [];
         this._fileName = fileName;
-        function callbackWrapper()
+
+        /**
+         * @param {boolean} accepted
+         * @this {WebInspector.FileOutputStream}
+         */
+        function callbackWrapper(accepted)
         {
-            WebInspector.fileManager.removeEventListener(WebInspector.FileManager.EventTypes.SavedURL, callbackWrapper, this);
-            WebInspector.fileManager.addEventListener(WebInspector.FileManager.EventTypes.AppendedToURL, this._onAppendDone, this);
-            callback(this);
+            if (accepted)
+                WebInspector.fileManager.addEventListener(WebInspector.FileManager.EventTypes.AppendedToURL, this._onAppendDone, this);
+            callback(accepted);
         }
-        WebInspector.fileManager.addEventListener(WebInspector.FileManager.EventTypes.SavedURL, callbackWrapper, this);
-        WebInspector.fileManager.save(this._fileName, "", true);
+        WebInspector.fileManager.save(this._fileName, "", true, callbackWrapper.bind(this));
     },
 
     /**
      * @param {string} data
-     * @param {function(WebInspector.OutputStream)=} callback
+     * @param {function(!WebInspector.OutputStream)=} callback
      */
     write: function(data, callback)
     {
@@ -391,7 +363,7 @@ WebInspector.FileOutputStream.prototype = {
     },
 
     /**
-     * @param {Event} event
+     * @param {!WebInspector.Event} event
      */
     _onAppendDone: function(event)
     {

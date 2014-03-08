@@ -30,7 +30,7 @@
 
 
 .overrides-view .tabbed-pane {
-    flex-direction: row;
+    flex-direction: row !important;
 }
 
 .overrides-view .tabbed-pane-header {
@@ -42,6 +42,7 @@
 .overrides-view .tabbed-pane-content {
     padding-top: 10px;
     padding-left: 10px;
+    padding-right: 10px;
     overflow-x: hidden;
 }
 
@@ -112,7 +113,11 @@
     overflow: hidden;
     white-space: nowrap;
     text-overflow: ellipsis;
-    padding-top: 3px;
+    margin-top: 10px;
+}
+
+.overrides-viewport {
+    width: 100%;
 }
 
 .overrides-viewport input {
@@ -127,9 +132,13 @@ button.overrides-swap {
     height: 20px;
 }
 
+.overrides-view label {
+    display: flex;
+    height: auto;
+}
+
 .overrides-viewport label {
-    display: block;
-    margin-bottom: 5px;
+    margin-bottom: 10px;
 }
 
 .overrides-viewport table {
@@ -138,6 +147,12 @@ button.overrides-swap {
 
 .overrides-viewport > label {
     margin-bottom: 8px;
+}
+
+.overrides-viewport .help-footnote {
+    border-top: 1px solid #EEEEEE;
+    margin: 0;
+    padding: 12px;
 }
 
 .overrides-user-agent input[type=text] {
@@ -150,8 +165,11 @@ button.overrides-swap {
 }
 
 .overrides-sensors > label {
-    display: block;
     margin-bottom: 10px;
+}
+
+.overrides-device, .overrides-viewport, .overrides-user-agent, .overrides-sensors {
+    flex: none !important;
 }
 
 .overrides-sensors input {
@@ -205,7 +223,7 @@ button.overrides-swap {
 
 .overrides-view .overrides-footer::before {
     background-image: url(Images/statusbarButtonGlyphs.png);
-    background-size: 320px 120px;
+    background-size: 320px 144px;
     width: 10px;
     height: 10px;
     content: "";

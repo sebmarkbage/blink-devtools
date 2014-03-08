@@ -31,26 +31,28 @@
 /**
  * @constructor
  * @implements {WebInspector.ScriptSourceMapping}
- * @param {WebInspector.Workspace} workspace
+ * @param {!WebInspector.DebuggerModel} debuggerModel
+ * @param {!WebInspector.Workspace} workspace
  */
-WebInspector.ResourceScriptMapping = function(workspace)
+WebInspector.ResourceScriptMapping = function(debuggerModel, workspace)
 {
+    this._debuggerModel = debuggerModel;
     this._workspace = workspace;
     this._workspace.addEventListener(WebInspector.Workspace.Events.UISourceCodeAdded, this._uiSourceCodeAddedToWorkspace, this);
+    this._boundURLs = new StringSet();
 
-    WebInspector.debuggerModel.addEventListener(WebInspector.DebuggerModel.Events.GlobalObjectCleared, this._debuggerReset, this);
-    this._initialize();
+    debuggerModel.addEventListener(WebInspector.DebuggerModel.Events.GlobalObjectCleared, this._debuggerReset, this);
 }
 
 WebInspector.ResourceScriptMapping.prototype = {
     /**
-     * @param {WebInspector.RawLocation} rawLocation
-     * @return {WebInspector.UILocation}
+     * @param {!WebInspector.RawLocation} rawLocation
+     * @return {?WebInspector.UILocation}
      */
     rawLocationToUILocation: function(rawLocation)
     {
-        var debuggerModelLocation = /** @type {WebInspector.DebuggerModel.Location} */ (rawLocation);
-        var script = WebInspector.debuggerModel.scriptForId(debuggerModelLocation.scriptId);
+        var debuggerModelLocation = /** @type {!WebInspector.DebuggerModel.Location} */ (rawLocation);
+        var script = this._debuggerModel.scriptForId(debuggerModelLocation.scriptId);
         var uiSourceCode = this._workspaceUISourceCodeForScript(script);
         if (!uiSourceCode)
             return null;
@@ -61,30 +63,26 @@ WebInspector.ResourceScriptMapping.prototype = {
     },
 
     /**
-     * @param {WebInspector.UISourceCode} uiSourceCode
+     * @param {!WebInspector.UISourceCode} uiSourceCode
      * @param {number} lineNumber
      * @param {number} columnNumber
-     * @return {WebInspector.DebuggerModel.Location}
+     * @return {?WebInspector.DebuggerModel.Location}
      */
     uiLocationToRawLocation: function(uiSourceCode, lineNumber, columnNumber)
     {
         var scripts = this._scriptsForUISourceCode(uiSourceCode);
         console.assert(scripts.length);
-        return WebInspector.debuggerModel.createRawLocation(scripts[0], lineNumber, columnNumber);
+        return this._debuggerModel.createRawLocation(scripts[0], lineNumber, columnNumber);
     },
 
     /**
-     * @param {WebInspector.Script} script
+     * @param {!WebInspector.Script} script
      */
     addScript: function(script)
     {
         if (script.isAnonymousScript())
             return;
         script.pushSourceMapping(this);
-
-        var scriptsForSourceURL = script.isInlineScript() ? this._inlineScriptsForSourceURL : this._nonInlineScriptsForSourceURL;
-        scriptsForSourceURL.put(script.sourceURL, scriptsForSourceURL.get(script.sourceURL) || []);
-        scriptsForSourceURL.get(script.sourceURL).push(script);
 
         var uiSourceCode = this._workspaceUISourceCodeForScript(script);
         if (!uiSourceCode)
@@ -95,7 +93,9 @@ WebInspector.ResourceScriptMapping.prototype = {
 
     _uiSourceCodeAddedToWorkspace: function(event)
     {
-        var uiSourceCode = /** @type {WebInspector.UISourceCode} */ (event.data);
+        var uiSourceCode = /** @type {!WebInspector.UISourceCode} */ (event.data);
+        if (uiSourceCode.project().isServiceProject())
+            return;
         if (!uiSourceCode.url)
             return;
 
@@ -107,7 +107,7 @@ WebInspector.ResourceScriptMapping.prototype = {
     },
 
     /**
-     * @param {WebInspector.UISourceCode} uiSourceCode
+     * @param {!WebInspector.UISourceCode} uiSourceCode
      */
     _hasMergedToVM: function(uiSourceCode)
     {
@@ -119,7 +119,7 @@ WebInspector.ResourceScriptMapping.prototype = {
     },
 
     /**
-     * @param {WebInspector.UISourceCode} uiSourceCode
+     * @param {!WebInspector.UISourceCode} uiSourceCode
      */
     _hasDivergedFromVM: function(uiSourceCode)
     {
@@ -131,8 +131,8 @@ WebInspector.ResourceScriptMapping.prototype = {
     },
 
     /**
-     * @param {WebInspector.Script} script
-     * @return {WebInspector.UISourceCode}
+     * @param {!WebInspector.Script} script
+     * @return {?WebInspector.UISourceCode}
      */
     _workspaceUISourceCodeForScript: function(script)
     {
@@ -142,31 +142,19 @@ WebInspector.ResourceScriptMapping.prototype = {
     },
 
     /**
-     * @param {WebInspector.UISourceCode} uiSourceCode
-     * @return {Array.<WebInspector.Script>}
+     * @param {!WebInspector.UISourceCode} uiSourceCode
+     * @return {!Array.<!WebInspector.Script>}
      */
     _scriptsForUISourceCode: function(uiSourceCode)
     {
-        var isInlineScript;
-        switch (uiSourceCode.contentType()) {
-        case WebInspector.resourceTypes.Document:
-            isInlineScript = true;
-            break;
-        case WebInspector.resourceTypes.Script:
-            isInlineScript = false;
-            break;
-        default:
-            return [];
-        }
         if (!uiSourceCode.url)
             return [];
-        var scriptsForSourceURL = isInlineScript ? this._inlineScriptsForSourceURL : this._nonInlineScriptsForSourceURL;
-        return scriptsForSourceURL.get(uiSourceCode.url) || [];
+        return this._debuggerModel.scriptsForSourceURL(uiSourceCode.url);
     },
 
     /**
-     * @param {WebInspector.UISourceCode} uiSourceCode
-     * @param {Array.<WebInspector.Script>} scripts
+     * @param {!WebInspector.UISourceCode} uiSourceCode
+     * @param {!Array.<!WebInspector.Script>} scripts
      */
     _bindUISourceCodeToScripts: function(uiSourceCode, scripts)
     {
@@ -176,16 +164,15 @@ WebInspector.ResourceScriptMapping.prototype = {
         for (var i = 0; i < scripts.length; ++i)
             scripts[i].updateLocations();
         uiSourceCode.setSourceMapping(this);
+        this._boundURLs.put(uiSourceCode.url);
     },
 
     /**
-     * @param {WebInspector.UISourceCode} uiSourceCode
-     * @param {Array.<WebInspector.Script>} scripts
+     * @param {!WebInspector.UISourceCode} uiSourceCode
      */
-    _unbindUISourceCodeFromScripts: function(uiSourceCode, scripts)
+    _unbindUISourceCode: function(uiSourceCode)
     {
-        console.assert(scripts.length);
-        var scriptFile = /** @type {WebInspector.ResourceScriptFile} */ (uiSourceCode.scriptFile());
+        var scriptFile = /** @type {!WebInspector.ResourceScriptFile} */ (uiSourceCode.scriptFile());
         if (scriptFile) {
             scriptFile.dispose();
             uiSourceCode.setScriptFile(null);
@@ -193,32 +180,17 @@ WebInspector.ResourceScriptMapping.prototype = {
         uiSourceCode.setSourceMapping(null);
     },
 
-    _initialize: function()
-    {
-        /** @type {StringMap.<!Array.<!WebInspector.Script>>} */
-        this._inlineScriptsForSourceURL = new StringMap();
-        /** @type {StringMap.<!Array.<!WebInspector.Script>>} */
-        this._nonInlineScriptsForSourceURL = new StringMap();
-    },
-
     _debuggerReset: function()
     {
-        /**
-         * @param {!Array.<!WebInspector.Script>} scripts
-         */
-        function unbindUISourceCodesForScripts(scripts)
+        var boundURLs = this._boundURLs.values();
+        for (var i = 0; i < boundURLs.length; ++i)
         {
-            if (!scripts.length)
-                return;
-            var uiSourceCode = this._workspaceUISourceCodeForScript(scripts[0]);
+            var uiSourceCode = this._workspace.uiSourceCodeForURL(boundURLs[i]);
             if (!uiSourceCode)
-                return;
-            this._unbindUISourceCodeFromScripts(uiSourceCode, scripts);
+                continue;
+            this._unbindUISourceCode(uiSourceCode);
         }
-
-        this._inlineScriptsForSourceURL.values().forEach(unbindUISourceCodesForScripts.bind(this));
-        this._nonInlineScriptsForSourceURL.values().forEach(unbindUISourceCodesForScripts.bind(this));
-        this._initialize();
+        this._boundURLs.clear();
     },
 }
 
@@ -258,8 +230,8 @@ WebInspector.ScriptFile.prototype = {
  * @constructor
  * @implements {WebInspector.ScriptFile}
  * @extends {WebInspector.Object}
- * @param {WebInspector.ResourceScriptMapping} resourceScriptMapping
- * @param {WebInspector.UISourceCode} uiSourceCode
+ * @param {!WebInspector.ResourceScriptMapping} resourceScriptMapping
+ * @param {!WebInspector.UISourceCode} uiSourceCode
  */
 WebInspector.ResourceScriptFile = function(resourceScriptMapping, uiSourceCode, scripts)
 {
@@ -282,7 +254,8 @@ WebInspector.ResourceScriptFile.prototype = {
     {
         /**
          * @param {?string} error
-         * @param {DebuggerAgent.SetScriptSourceError=} errorData
+         * @param {!DebuggerAgent.SetScriptSourceError=} errorData
+         * @this {WebInspector.ResourceScriptFile}
          */
         function innerCallback(error, errorData)
         {
@@ -299,9 +272,7 @@ WebInspector.ResourceScriptFile.prototype = {
         if (!this._script)
             return;
         var source = this._uiSourceCode.workingCopy();
-        if (this._script.hasSourceURL && !this._sourceEndsWithSourceURL(source))
-            source += "\n //# sourceURL=" + this._script.sourceURL;
-        WebInspector.debuggerModel.setScriptSource(this._script.scriptId, source, innerCallback.bind(this));
+        this._resourceScriptMapping._debuggerModel.setScriptSource(this._script.scriptId, source, innerCallback.bind(this));
     },
 
     /**
@@ -309,41 +280,17 @@ WebInspector.ResourceScriptFile.prototype = {
      */
     _isDiverged: function()
     {
-        if (this._uiSourceCode.formatted())
-            return false;
         if (this._uiSourceCode.isDirty())
             return true;
         if (!this._script)
             return false;
         if (typeof this._scriptSource === "undefined")
             return false;
-        return !this._sourceMatchesScriptSource(this._uiSourceCode.workingCopy(), this._scriptSource);
+        return this._uiSourceCode.workingCopy() !== this._scriptSource;
     },
 
     /**
-     * @param {string} source
-     * @param {string} scriptSource
-     * @return {boolean}
-     */
-    _sourceMatchesScriptSource: function(source, scriptSource)
-    {
-        if (!scriptSource.startsWith(source))
-            return false;
-        var scriptSourceTail = scriptSource.substr(source.length).trim();
-        return !scriptSourceTail || !!scriptSourceTail.match(/^\/\/[@#]\ssourceURL=\s*(\S*?)\s*$/m);
-    },
-
-    /**
-     * @param {string} source
-     * @return {boolean}
-     */
-    _sourceEndsWithSourceURL: function(source)
-    {
-        return !!source.match(/\/\/[@#]\ssourceURL=\s*(\S*?)\s*$/m);
-    },
-
-    /**
-     * @param {WebInspector.Event} event
+     * @param {!WebInspector.Event} event
      */
     _workingCopyChanged: function(event)
     {
@@ -410,6 +357,7 @@ WebInspector.ResourceScriptFile.prototype = {
 
         /**
          * @param {?string} source
+         * @this {WebInspector.ResourceScriptFile}
          */
         function callback(source)
         {

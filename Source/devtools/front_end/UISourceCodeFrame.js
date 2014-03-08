@@ -29,7 +29,7 @@
 /**
  * @constructor
  * @extends {WebInspector.SourceFrame}
- * @param {WebInspector.UISourceCode} uiSourceCode
+ * @param {!WebInspector.UISourceCode} uiSourceCode
  */
 WebInspector.UISourceCodeFrame = function(uiSourceCode)
 {
@@ -38,13 +38,27 @@ WebInspector.UISourceCodeFrame = function(uiSourceCode)
     WebInspector.settings.textEditorAutocompletion.addChangeListener(this._enableAutocompletionIfNeeded, this);
     this._enableAutocompletionIfNeeded();
 
-    this._uiSourceCode.addEventListener(WebInspector.UISourceCode.Events.FormattedChanged, this._onFormattedChanged, this);
     this._uiSourceCode.addEventListener(WebInspector.UISourceCode.Events.WorkingCopyChanged, this._onWorkingCopyChanged, this);
     this._uiSourceCode.addEventListener(WebInspector.UISourceCode.Events.WorkingCopyCommitted, this._onWorkingCopyCommitted, this);
     this._updateStyle();
+    this.addShortcut(WebInspector.KeyboardShortcut.makeKey("s", WebInspector.KeyboardShortcut.Modifiers.CtrlOrMeta), this._commitEditing.bind(this));
 }
 
 WebInspector.UISourceCodeFrame.prototype = {
+    _commitEditing: function()
+    {
+        this.commitEditing();
+        return true;
+    },
+
+    /**
+     * @return {!WebInspector.UISourceCode}
+     */
+    uiSourceCode: function()
+    {
+        return this._uiSourceCode;
+    },
+
     _enableAutocompletionIfNeeded: function()
     {
         this.textEditor.setCompletionDictionary(WebInspector.settings.textEditorAutocompletion.get() ? new WebInspector.SampleCompletionDictionary() : null);
@@ -86,10 +100,7 @@ WebInspector.UISourceCodeFrame.prototype = {
         this._uiSourceCode.checkContentUpdated();
     },
 
-    /**
-     * @param {string} text
-     */
-    commitEditing: function(text)
+    commitEditing: function()
     {
         if (!this._uiSourceCode.isDirty())
             return;
@@ -121,30 +132,7 @@ WebInspector.UISourceCodeFrame.prototype = {
     },
 
     /**
-     * @param {WebInspector.Event} event
-     */
-    _onFormattedChanged: function(event)
-    {
-        var content = /** @type {string} */ (event.data.content);
-        this._textEditor.setReadOnly(this._uiSourceCode.formatted());
-        var selection = this._textEditor.selection();
-        this._innerSetContent(content);
-        var start = null;
-        var end = null;
-        if (this._uiSourceCode.formatted()) {
-            start = event.data.newFormatter.originalToFormatted(selection.startLine, selection.startColumn);
-            end = event.data.newFormatter.originalToFormatted(selection.endLine, selection.endColumn);
-        } else {
-            start = event.data.oldFormatter.formattedToOriginal(selection.startLine, selection.startColumn);
-            end = event.data.oldFormatter.formattedToOriginal(selection.endLine, selection.endColumn);
-        }
-        this.textEditor.setSelection(new WebInspector.TextRange(start[0], start[1],
-            end[0], end[1]));
-        this.textEditor.revealLine(start[0]);
-    },
-
-    /**
-     * @param {WebInspector.Event} event
+     * @param {!WebInspector.Event} event
      */
     _onWorkingCopyChanged: function(event)
     {
@@ -155,7 +143,7 @@ WebInspector.UISourceCodeFrame.prototype = {
     },
 
     /**
-     * @param {WebInspector.Event} event
+     * @param {!WebInspector.Event} event
      */
     _onWorkingCopyCommitted: function(event)
     {
@@ -169,7 +157,7 @@ WebInspector.UISourceCodeFrame.prototype = {
 
     _updateStyle: function()
     {
-        this.element.enableStyleClass("source-frame-unsaved-committed-changes", this._uiSourceCode.hasUnsavedCommittedChanges());
+        this.element.classList.toggle("source-frame-unsaved-committed-changes", this._uiSourceCode.hasUnsavedCommittedChanges());
     },
 
     onUISourceCodeContentChanged: function()

@@ -29,14 +29,14 @@
  */
 
 WebInspector = {};
-WebInspector.UIString = function(s) { return s; };
 
 importScripts("AllocationProfile.js");
 importScripts("HeapSnapshot.js");
+importScripts("HeapSnapshotCommon.js");
 importScripts("HeapSnapshotLoader.js");
 importScripts("HeapSnapshotWorkerDispatcher.js");
 importScripts("JSHeapSnapshot.js");
-importScripts("FileUtils.js");
+importScripts("TextUtils.js");
 importScripts("UIString.js");
 importScripts("utilities.js");
 

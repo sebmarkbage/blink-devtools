@@ -26,14 +26,14 @@
 /**
  * @constructor
  * @extends {WebInspector.View}
- * @param {WebInspector.CPUProfileHeader} profileHeader
+ * @param {!WebInspector.CPUProfileHeader} profileHeader
  */
 WebInspector.CPUProfileView = function(profileHeader)
 {
     WebInspector.View.call(this);
 
-    this.element.addStyleClass("profile-view");
-    
+    this.element.classList.add("cpu-profile-view");
+
     this.showSelfTimeAsPercent = WebInspector.settings.createSetting("cpuProfilerShowSelfTimeAsPercent", true);
     this.showTotalTimeAsPercent = WebInspector.settings.createSetting("cpuProfilerShowTotalTimeAsPercent", true);
     this.showAverageTimeAsPercent = WebInspector.settings.createSetting("cpuProfilerShowAverageTimeAsPercent", true);
@@ -89,7 +89,7 @@ WebInspector.CPUProfileView = function(profileHeader)
     if (this.profile._profile) // If the profile has been loaded from file then use it.
         this._processProfileData(this.profile._profile);
     else
-        ProfilerAgent.getCPUProfile(this.profile.uid, this._getCPUProfileCallback.bind(this));
+        this._processProfileData(this.profile.protocolProfile());
 }
 
 WebInspector.CPUProfileView._TypeFlame = "Flame";
@@ -108,34 +108,9 @@ WebInspector.CPUProfileView.prototype = {
         this._flameChart.selectRange(timeLeft, timeRight);
     },
 
-    _revealProfilerNode: function(event)
-    {
-        var current = this.profileDataGridTree.children[0];
-
-        while (current && current.profileNode !== event.data)
-            current = current.traverseNextNode(false, null, false);
-
-        if (current)
-            current.revealAndSelect();
-    },
-
     /**
-     * @param {?Protocol.Error} error
-     * @param {ProfilerAgent.CPUProfile} profile
+     * @param {?ProfilerAgent.CPUProfile} profile
      */
-    _getCPUProfileCallback: function(error, profile)
-    {
-        if (error)
-            return;
-
-        if (!profile.head) {
-            // Profiling was tentatively terminated with the "Clear all profiles." button.
-            return;
-        }
-
-        this._processProfileData(profile);
-    },
-
     _processProfileData: function(profile)
     {
         this.profileHead = profile.head;
@@ -163,7 +138,7 @@ WebInspector.CPUProfileView.prototype = {
     _getBottomUpProfileDataGridTree: function()
     {
         if (!this._bottomUpProfileDataGridTree)
-            this._bottomUpProfileDataGridTree = new WebInspector.BottomUpProfileDataGridTree(this, this.profileHead);
+            this._bottomUpProfileDataGridTree = new WebInspector.BottomUpProfileDataGridTree(this, /** @type {!ProfilerAgent.CPUProfileNode} */ (this.profileHead));
         return this._bottomUpProfileDataGridTree;
     },
 
@@ -173,7 +148,7 @@ WebInspector.CPUProfileView.prototype = {
     _getTopDownProfileDataGridTree: function()
     {
         if (!this._topDownProfileDataGridTree)
-            this._topDownProfileDataGridTree = new WebInspector.TopDownProfileDataGridTree(this, this.profileHead);
+            this._topDownProfileDataGridTree = new WebInspector.TopDownProfileDataGridTree(this, /** @type {!ProfilerAgent.CPUProfileNode} */ (this.profileHead));
         return this._topDownProfileDataGridTree;
     },
 
@@ -374,16 +349,25 @@ WebInspector.CPUProfileView.prototype = {
         this._jumpToSearchResult(this._currentSearchResultIndex);
     },
 
+    /**
+     * @return {boolean}
+     */
     showingFirstSearchResult: function()
     {
         return (this._currentSearchResultIndex === 0);
     },
 
+    /**
+     * @return {boolean}
+     */
     showingLastSearchResult: function()
     {
         return (this._searchResults && this._currentSearchResultIndex === (this._searchResults.length - 1));
     },
 
+    /**
+     * @return {number}
+     */
     currentSearchResultIndex: function() {
         return this._currentSearchResultIndex;
     },
@@ -402,26 +386,24 @@ WebInspector.CPUProfileView.prototype = {
     {
         if (this._flameChart)
             return;
-        var dataProvider = new WebInspector.CPUFlameChartDataProvider(this);
-        this._flameChart = new WebInspector.FlameChart(dataProvider);
+        this._dataProvider = new WebInspector.CPUFlameChartDataProvider(this);
+        this._flameChart = new WebInspector.FlameChart(this._dataProvider);
         this._flameChart.addEventListener(WebInspector.FlameChart.Events.EntrySelected, this._onEntrySelected.bind(this));
     },
 
     /**
-     * @param {WebInspector.Event} event
+     * @param {!WebInspector.Event} event
      */
     _onEntrySelected: function(event)
     {
-        var node = event.data;
+        var entryIndex = event.data;
+        var node = this._dataProvider._entryNodes[entryIndex];
         if (!node || !node.scriptId)
             return;
         var script = WebInspector.debuggerModel.scriptForId(node.scriptId)
         if (!script)
             return;
-        var uiLocation = script.rawLocationToUILocation(node.lineNumber);
-        if (!uiLocation)
-            return;
-        WebInspector.panel("sources").showUILocation(uiLocation);
+        WebInspector.Revealer.reveal(script.rawLocationToUILocation(node.lineNumber));
     },
 
     _changeView: function()
@@ -435,7 +417,7 @@ WebInspector.CPUProfileView.prototype = {
             this.dataGrid.detach();
             this._flameChart.show(this.element);
             this._viewType.set(WebInspector.CPUProfileView._TypeFlame);
-            this._statusBarButtonsElement.enableStyleClass("hidden", true);
+            this._statusBarButtonsElement.classList.toggle("hidden", true);
             return;
         case WebInspector.CPUProfileView._TypeTree:
             this.profileDataGridTree = this._getTopDownProfileDataGridTree();
@@ -449,7 +431,7 @@ WebInspector.CPUProfileView.prototype = {
             break;
         }
 
-        this._statusBarButtonsElement.enableStyleClass("hidden", false);
+        this._statusBarButtonsElement.classList.toggle("hidden", false);
 
         if (this._flameChart)
             this._flameChart.detach();
@@ -553,14 +535,14 @@ WebInspector.CPUProfileView.prototype = {
             return;
 
         var cell = event.target.enclosingNodeOrSelfWithNodeName("td");
-        if (!cell || (!cell.hasStyleClass("total-column") && !cell.hasStyleClass("self-column") && !cell.hasStyleClass("average-column")))
+        if (!cell || (!cell.classList.contains("total-column") && !cell.classList.contains("self-column") && !cell.classList.contains("average-column")))
             return;
 
-        if (cell.hasStyleClass("total-column"))
+        if (cell.classList.contains("total-column"))
             this.showTotalTimeAsPercent.set(!this.showTotalTimeAsPercent.get());
-        else if (cell.hasStyleClass("self-column"))
+        else if (cell.classList.contains("self-column"))
             this.showSelfTimeAsPercent.set(!this.showSelfTimeAsPercent.get());
-        else if (cell.hasStyleClass("average-column"))
+        else if (cell.classList.contains("average-column"))
             this.showAverageTimeAsPercent.set(!this.showAverageTimeAsPercent.get());
 
         this.refreshShowAsPercents();
@@ -598,17 +580,17 @@ WebInspector.CPUProfileView.prototype = {
         var head = this.profileHead;
         head.parent = null;
         head.head = null;
-        var nodesToTraverse = [ { parent: head, children: head.children } ];
-        while (nodesToTraverse.length > 0) {
-            var pair = nodesToTraverse.pop();
-            var parent = pair.parent;
-            var children = pair.children;
+        var nodesToTraverse = [ head ];
+        while (nodesToTraverse.length) {
+            var parent = nodesToTraverse.pop();
+            var children = parent.children;
             var length = children.length;
             for (var i = 0; i < length; ++i) {
-                children[i].head = head;
-                children[i].parent = parent;
-                if (children[i].children.length > 0)
-                    nodesToTraverse.push({ parent: children[i], children: children[i].children });
+                var child = children[i];
+                child.head = head;
+                child.parent = parent;
+                if (child.children.length)
+                    nodesToTraverse.push(child);
             }
         }
     },
@@ -627,7 +609,7 @@ WebInspector.CPUProfileView.prototype = {
         var topLevelNodes = this.profileHead.children;
         for (var i = 0; i < topLevelNodes.length; i++) {
             var node = topLevelNodes[i];
-            if (node.functionName == "(garbage collector)") {
+            if (node.functionName === "(garbage collector)") {
                 this._gcNode = node;
                 break;
             }
@@ -640,14 +622,18 @@ WebInspector.CPUProfileView.prototype = {
 /**
  * @constructor
  * @extends {WebInspector.ProfileType}
- * @implements {ProfilerAgent.Dispatcher}
+ * @implements {WebInspector.CPUProfilerModel.Delegate}
  */
 WebInspector.CPUProfileType = function()
 {
     WebInspector.ProfileType.call(this, WebInspector.CPUProfileType.TypeId, WebInspector.UIString("Collect JavaScript CPU Profile"));
-    InspectorBackend.registerProfilerDispatcher(this);
     this._recording = false;
+
+    this._nextAnonymousConsoleProfileNumber = 1;
+    this._anonymousConsoleProfileIdToTitle = {};
+
     WebInspector.CPUProfileType.instance = this;
+    WebInspector.cpuProfilerModel.setDelegate(this);
 }
 
 WebInspector.CPUProfileType.TypeId = "CPU";
@@ -693,13 +679,73 @@ WebInspector.CPUProfileType.prototype = {
     },
 
     /**
-     * @param {ProfilerAgent.ProfileHeader} profileHeader
+     * @param {string} id
+     * @param {!DebuggerAgent.Location} scriptLocation
+     * @param {string=} title
      */
-    addProfileHeader: function(profileHeader)
+    consoleProfileStarted: function(id, scriptLocation, title)
     {
-        this.addProfile(this.createProfile(profileHeader));
+        var resolvedTitle = title;
+        if (!resolvedTitle) {
+            resolvedTitle = WebInspector.UIString("Profile %s", this._nextAnonymousConsoleProfileNumber++);
+            this._anonymousConsoleProfileIdToTitle[id] = resolvedTitle;
+        }
+        this._addMessageToConsole(WebInspector.ConsoleMessage.MessageType.Profile, scriptLocation, WebInspector.UIString("Profile '%s' started.", resolvedTitle));
     },
 
+    /**
+     * @param {string} protocolId
+     * @param {!DebuggerAgent.Location} scriptLocation
+     * @param {!ProfilerAgent.CPUProfile} cpuProfile
+     * @param {string=} title
+     */
+    consoleProfileFinished: function(protocolId, scriptLocation, cpuProfile, title)
+    {
+        var resolvedTitle = title;
+        if (typeof title === "undefined") {
+            resolvedTitle = this._anonymousConsoleProfileIdToTitle[protocolId];
+            delete this._anonymousConsoleProfileIdToTitle[protocolId];
+        }
+
+        var profile = new WebInspector.CPUProfileHeader(this, resolvedTitle);
+        profile.setProtocolProfile(cpuProfile);
+        this.addProfile(profile);
+        this._addMessageToConsole(WebInspector.ConsoleMessage.MessageType.ProfileEnd, scriptLocation, WebInspector.UIString("Profile '%s' finished.", resolvedTitle));
+    },
+
+    /**
+     * @param {string} type
+     * @param {!DebuggerAgent.Location} scriptLocation
+     * @param {string} messageText
+     */
+    _addMessageToConsole: function(type, scriptLocation, messageText)
+    {
+        var script = WebInspector.debuggerModel.scriptForId(scriptLocation.scriptId);
+        var message = new WebInspector.ConsoleMessage(
+            WebInspector.ConsoleMessage.MessageSource.ConsoleAPI,
+            WebInspector.ConsoleMessage.MessageLevel.Debug,
+            messageText,
+            type,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            [{
+                functionName: "",
+                scriptId: scriptLocation.scriptId,
+                url: script ? script.contentURL() : "",
+                lineNumber: scriptLocation.lineNumber,
+                columnNumber: scriptLocation.columnNumber || 0
+            }]);
+
+        WebInspector.console.addMessage(message);
+    },
+
+    /**
+     * @return {boolean}
+     */
     isRecordingProfile: function()
     {
         return this._recording;
@@ -707,7 +753,13 @@ WebInspector.CPUProfileType.prototype = {
 
     startRecordingProfile: function()
     {
+        if (this._profileBeingRecorded)
+            return;
+        this._profileBeingRecorded = new WebInspector.CPUProfileHeader(this);
+        this.addProfile(this._profileBeingRecorded);
+        this._profileBeingRecorded.updateStatus(WebInspector.UIString("Recording\u2026"));
         this._recording = true;
+        WebInspector.cpuProfilerModel.setRecording(true);
         WebInspector.userMetrics.ProfilesCPUProfileTaken.record();
         ProfilerAgent.start();
     },
@@ -715,67 +767,42 @@ WebInspector.CPUProfileType.prototype = {
     stopRecordingProfile: function()
     {
         this._recording = false;
-        ProfilerAgent.stop();
-    },
+        WebInspector.cpuProfilerModel.setRecording(false);
 
-    /**
-     * @param {boolean} isProfiling
-     */
-    setRecordingProfile: function(isProfiling)
-    {
-        this._recording = isProfiling;
+        /**
+         * @param {?string} error
+         * @param {?ProfilerAgent.CPUProfile} profile
+         * @this {WebInspector.CPUProfileType}
+         */
+        function didStopProfiling(error, profile)
+        {
+            if (!this._profileBeingRecorded)
+                return;
+            this._profileBeingRecorded.setProtocolProfile(profile);
+            this._profileBeingRecorded.updateStatus("");
+            var recordedProfile = this._profileBeingRecorded;
+            this._profileBeingRecorded = null;
+            WebInspector.panels.profiles.showProfile(recordedProfile);
+        }
+        ProfilerAgent.stop(didStopProfiling.bind(this));
     },
 
     /**
      * @override
-     * @param {string=} title
+     * @param {string} title
      * @return {!WebInspector.ProfileHeader}
      */
-    createTemporaryProfile: function(title)
+    createProfileLoadedFromFile: function(title)
     {
-        title = title || WebInspector.UIString("Recording\u2026");
         return new WebInspector.CPUProfileHeader(this, title);
     },
 
     /**
      * @override
-     * @param {ProfilerAgent.ProfileHeader} profile
-     * @return {!WebInspector.ProfileHeader}
      */
-    createProfile: function(profile)
+    profileBeingRecordedRemoved: function()
     {
-        return new WebInspector.CPUProfileHeader(this, profile.title, profile.uid);
-    },
-
-    /**
-     * @override
-     * @param {!WebInspector.ProfileHeader} profile
-     */
-    removeProfile: function(profile)
-    {
-        WebInspector.ProfileType.prototype.removeProfile.call(this, profile);
-        if (!profile.isTemporary && !profile.fromFile())
-            ProfilerAgent.removeProfile(this.id, profile.uid);
-    },
-
-    /**
-     * @override
-     */
-    resetProfiles: function()
-    {
-        this._reset();
-    },
-
-    /** @deprecated To be removed from the protocol */
-    addHeapSnapshotChunk: function(uid, chunk)
-    {
-        throw new Error("Never called");
-    },
-
-    /** @deprecated To be removed from the protocol */
-    reportHeapSnapshotProgress: function(done, total)
-    {
-        throw new Error("Never called");
+        this.stopRecordingProfile();
     },
 
     __proto__: WebInspector.ProfileType.prototype
@@ -787,56 +814,59 @@ WebInspector.CPUProfileType.prototype = {
  * @implements {WebInspector.OutputStream}
  * @implements {WebInspector.OutputStreamDelegate}
  * @param {!WebInspector.CPUProfileType} type
- * @param {string} title
- * @param {number=} uid
+ * @param {string=} title
  */
-WebInspector.CPUProfileHeader = function(type, title, uid)
+WebInspector.CPUProfileHeader = function(type, title)
 {
-    WebInspector.ProfileHeader.call(this, type, title, uid);
+    WebInspector.ProfileHeader.call(this, type, title || WebInspector.UIString("Profile %d", type._nextProfileUid));
+    this._tempFile = null;
 }
 
 WebInspector.CPUProfileHeader.prototype = {
     onTransferStarted: function()
     {
         this._jsonifiedProfile = "";
-        this.sidebarElement.subtitle = WebInspector.UIString("Loading\u2026 %s", Number.bytesToString(this._jsonifiedProfile.length));
+        this.updateStatus(WebInspector.UIString("Loading\u2026 %s", Number.bytesToString(this._jsonifiedProfile.length)), true);
     },
 
     /**
-     * @param {WebInspector.ChunkedReader} reader
+     * @param {!WebInspector.ChunkedReader} reader
      */
     onChunkTransferred: function(reader)
     {
-        this.sidebarElement.subtitle = WebInspector.UIString("Loading\u2026 %d\%", Number.bytesToString(this._jsonifiedProfile.length));
+        this.updateStatus(WebInspector.UIString("Loading\u2026 %d\%", Number.bytesToString(this._jsonifiedProfile.length)));
     },
 
     onTransferFinished: function()
     {
-
-        this.sidebarElement.subtitle = WebInspector.UIString("Parsing\u2026");
+        this.updateStatus(WebInspector.UIString("Parsing\u2026"), true);
         this._profile = JSON.parse(this._jsonifiedProfile);
         this._jsonifiedProfile = null;
-        this.sidebarElement.subtitle = WebInspector.UIString("Loaded");
-        this.isTemporary = false;
+        this.updateStatus(WebInspector.UIString("Loaded"), false);
+
+        if (this._profileType._profileBeingRecorded === this)
+            this._profileType._profileBeingRecorded = null;
     },
 
     /**
-     * @param {WebInspector.ChunkedReader} reader
+     * @param {!WebInspector.ChunkedReader} reader
      */
     onError: function(reader, e)
     {
+        var subtitle;
         switch(e.target.error.code) {
         case e.target.error.NOT_FOUND_ERR:
-            this.sidebarElement.subtitle = WebInspector.UIString("'%s' not found.", reader.fileName());
-        break;
-        case e.target.error.NOT_READABLE_ERR:
-            this.sidebarElement.subtitle = WebInspector.UIString("'%s' is not readable", reader.fileName());
-        break;
-        case e.target.error.ABORT_ERR:
+            subtitle = WebInspector.UIString("'%s' not found.", reader.fileName());
             break;
+        case e.target.error.NOT_READABLE_ERR:
+            subtitle = WebInspector.UIString("'%s' is not readable", reader.fileName());
+            break;
+        case e.target.error.ABORT_ERR:
+            return;
         default:
-            this.sidebarElement.subtitle = WebInspector.UIString("'%s' error %d", reader.fileName(), e.target.error.code);
+            subtitle = WebInspector.UIString("'%s' error %d", reader.fileName(), e.target.error.code);
         }
+        this.updateStatus(subtitle);
     },
 
     /**
@@ -852,16 +882,25 @@ WebInspector.CPUProfileHeader.prototype = {
     /**
      * @override
      */
-    createSidebarTreeElement: function()
+    dispose: function()
     {
-        return new WebInspector.ProfileSidebarTreeElement(this, WebInspector.UIString("Profile %d"), "profile-sidebar-tree-item");
+        this.removeTempFile();
     },
 
     /**
      * @override
-     * @param {WebInspector.ProfilesPanel} profilesPanel
+     * @return {!WebInspector.ProfileSidebarTreeElement}
      */
-    createView: function(profilesPanel)
+    createSidebarTreeElement: function()
+    {
+        return new WebInspector.ProfileSidebarTreeElement(this, "profile-sidebar-tree-item");
+    },
+
+    /**
+     * @override
+     * @return {!WebInspector.CPUProfileView}
+     */
+    createView: function()
     {
         return new WebInspector.CPUProfileView(this);
     },
@@ -872,7 +911,7 @@ WebInspector.CPUProfileHeader.prototype = {
      */
     canSaveToFile: function()
     {
-        return true;
+        return !this.fromFile() && this._protocolProfile;
     },
 
     saveToFile: function()
@@ -880,32 +919,32 @@ WebInspector.CPUProfileHeader.prototype = {
         var fileOutputStream = new WebInspector.FileOutputStream();
 
         /**
-         * @param {?Protocol.Error} error
-         * @param {ProfilerAgent.CPUProfile} profile
+         * @param {boolean} accepted
+         * @this {WebInspector.CPUProfileHeader}
          */
-        function getCPUProfileCallback(error, profile)
+        function onOpenForSave(accepted)
         {
-            if (error) {
-                fileOutputStream.close();
+            if (!accepted)
                 return;
+            function didRead(data)
+            {
+                if (data)
+                    fileOutputStream.write(data, fileOutputStream.close.bind(fileOutputStream));
+                else
+                    fileOutputStream.close();
             }
-
-            if (!profile.head) {
-                // Profiling was tentatively terminated with the "Clear all profiles." button.
+            if (this._failedToCreateTempFile) {
+                WebInspector.log("Failed to open temp file with heap snapshot",
+                                 WebInspector.ConsoleMessage.MessageLevel.Error);
                 fileOutputStream.close();
-                return;
+            } else if (this._tempFile) {
+                this._tempFile.read(didRead.bind(this));
+            } else {
+                this._onTempFileReady = onOpenForSave.bind(this, accepted);
             }
-
-            fileOutputStream.write(JSON.stringify(profile), fileOutputStream.close.bind(fileOutputStream));
         }
-
-        function onOpen()
-        {
-            ProfilerAgent.getCPUProfile(this.uid, getCPUProfileCallback.bind(this));
-        }
-
         this._fileName = this._fileName || "CPU-" + new Date().toISO8601Compact() + this._profileType.fileExtension();
-        fileOutputStream.open(this._fileName, onOpen.bind(this));
+        fileOutputStream.open(this._fileName, onOpenForSave.bind(this));
     },
 
     /**
@@ -913,41 +952,183 @@ WebInspector.CPUProfileHeader.prototype = {
      */
     loadFromFile: function(file)
     {
-        this.sidebarElement.subtitle = WebInspector.UIString("Loading\u2026");
-        this.sidebarElement.wait = true;
-
+        this.updateStatus(WebInspector.UIString("Loading\u2026"), true);
         var fileReader = new WebInspector.ChunkedFileReader(file, 10000000, this);
         fileReader.start(this);
+    },
+
+
+    /**
+     * @return {?ProfilerAgent.CPUProfile}
+     */
+    protocolProfile: function()
+    {
+        return this._protocolProfile;
+    },
+
+    /**
+     * @param {!ProfilerAgent.CPUProfile} cpuProfile
+     */
+    setProtocolProfile: function(cpuProfile)
+    {
+        this._protocolProfile = cpuProfile;
+        this._saveProfileDataToTempFile(cpuProfile);
+        if (this.canSaveToFile())
+            this.dispatchEventToListeners(WebInspector.ProfileHeader.Events.ProfileReceived);
+    },
+
+    /**
+     * @param {!ProfilerAgent.CPUProfile} data
+     */
+    _saveProfileDataToTempFile: function(data)
+    {
+        var serializedData = JSON.stringify(data);
+
+        /**
+         * @this {WebInspector.CPUProfileHeader}
+         */
+        function didCreateTempFile(tempFile)
+        {
+            this._writeToTempFile(tempFile, serializedData);
+        }
+        new WebInspector.TempFile("cpu-profiler", this.uid,  didCreateTempFile.bind(this));
+    },
+
+    /**
+     * @param {?WebInspector.TempFile} tempFile
+     * @param {string} serializedData
+     */
+    _writeToTempFile: function(tempFile, serializedData)
+    {
+        this._tempFile = tempFile;
+        if (!tempFile) {
+            this._failedToCreateTempFile = true;
+            this._notifyTempFileReady();
+            return;
+        }
+        /**
+         * @param {boolean} success
+         * @this {WebInspector.CPUProfileHeader}
+         */
+        function didWriteToTempFile(success)
+        {
+            if (!success)
+                this._failedToCreateTempFile = true;
+            tempFile.finishWriting();
+            this._notifyTempFileReady();
+        }
+        tempFile.write(serializedData, didWriteToTempFile.bind(this));
+    },
+
+    _notifyTempFileReady: function()
+    {
+        if (this._onTempFileReady) {
+            this._onTempFileReady();
+            this._onTempFileReady = null;
+        }
     },
 
     __proto__: WebInspector.ProfileHeader.prototype
 }
 
 /**
+ * @return {!WebInspector.FlameChart.ColorGenerator}
+ */
+WebInspector.CPUProfileView.colorGenerator = function()
+{
+    if (!WebInspector.CPUProfileView._colorGenerator) {
+        var colorGenerator = new WebInspector.FlameChart.ColorGenerator();
+        colorGenerator.colorForID("(idle)::0", 50);
+        colorGenerator.colorForID("(program)::0", 50);
+        colorGenerator.colorForID("(garbage collector)::0", 50);
+        WebInspector.CPUProfileView._colorGenerator = colorGenerator;
+    }
+    return WebInspector.CPUProfileView._colorGenerator;
+}
+
+/**
  * @constructor
  * @implements {WebInspector.FlameChartDataProvider}
+ * @param {!WebInspector.CPUProfileView} cpuProfileView
  */
 WebInspector.CPUFlameChartDataProvider = function(cpuProfileView)
 {
     WebInspector.FlameChartDataProvider.call(this);
     this._cpuProfileView = cpuProfileView;
+    this._colorGenerator = WebInspector.CPUProfileView.colorGenerator();
 }
 
 WebInspector.CPUFlameChartDataProvider.prototype = {
     /**
-     * @param {WebInspector.FlameChart.ColorGenerator} colorGenerator
-     * @return {Object}
+     * @return {number}
      */
-    timelineData: function(colorGenerator)
+    barHeight: function()
     {
-        return this._timelineData || this._calculateTimelineData(colorGenerator);
+        return 15;
     },
 
     /**
-     * @param {WebInspector.FlameChart.ColorGenerator} colorGenerator
-     * @return {Object}
+     * @return {number}
      */
-    _calculateTimelineData: function(colorGenerator)
+    textBaseline: function()
+    {
+        return 4;
+    },
+
+    /**
+     * @return {number}
+     */
+    textPadding: function()
+    {
+        return 2;
+    },
+
+    /**
+     * @param {number} startTime
+     * @param {number} endTime
+     * @return {?Array.<number>}
+     */
+    dividerOffsets: function(startTime, endTime)
+    {
+        return null;
+    },
+
+    /**
+     * @return {number}
+     */
+    zeroTime: function()
+    {
+        return 0;
+    },
+
+    /**
+     * @return {number}
+     */
+    totalTime: function()
+    {
+        return this._cpuProfileView.profileHead.totalTime;
+    },
+
+    /**
+     * @return {number}
+     */
+    maxStackDepth: function()
+    {
+        return this._maxStackDepth;
+    },
+
+    /**
+     * @return {?WebInspector.FlameChart.TimelineData}
+     */
+    timelineData: function()
+    {
+        return this._timelineData || this._calculateTimelineData();
+    },
+
+    /**
+     * @return {?WebInspector.FlameChart.TimelineData}
+     */
+    _calculateTimelineData: function()
     {
         if (!this._cpuProfileView.profileHead)
             return null;
@@ -962,28 +1143,25 @@ WebInspector.CPUFlameChartDataProvider.prototype = {
 
         var openIntervals = [];
         var stackTrace = [];
-        var colorEntryIndexes = [];
         var maxDepth = 5; // minimum stack depth for the case when we see no activity.
         var depth = 0;
 
         /**
          * @constructor
-         * @param {!Object} colorPair
-         * @param {!number} depth
-         * @param {!number} duration
-         * @param {!number} startTime
-         * @param {Object} node
+         * @param {number} depth
+         * @param {number} duration
+         * @param {number} startTime
+         * @param {!Object} node
          */
-        function ChartEntry(colorPair, depth, duration, startTime, node)
+        function ChartEntry(depth, duration, startTime, node)
         {
-            this.colorPair = colorPair;
             this.depth = depth;
             this.duration = duration;
             this.startTime = startTime;
             this.node = node;
             this.selfTime = 0;
         }
-        var entries = /** @type {Array.<!ChartEntry>} */ ([]);
+        var entries = /** @type {!Array.<!ChartEntry>} */ ([]);
 
         for (var sampleIndex = 0; sampleIndex < samplesCount; sampleIndex++) {
             var node = idToNode[samples[sampleIndex]];
@@ -1026,15 +1204,10 @@ WebInspector.CPUFlameChartDataProvider.prototype = {
                 continue;
             }
 
+            var colorGenerator = this._colorGenerator;
+            var color = "";
             while (node) {
-                var colorPair = colorGenerator._colorPairForID(node.functionName + ":" + node.url + ":" + node.lineNumber);
-                var indexesForColor = colorEntryIndexes[colorPair.index];
-                if (!indexesForColor)
-                    indexesForColor = colorEntryIndexes[colorPair.index] = [];
-
-                var entry = new ChartEntry(colorPair, depth, samplingInterval, sampleIndex * samplingInterval, node);
-                indexesForColor.push(entries.length);
-                entries.push(entry);
+                entries.push(new ChartEntry(depth, samplingInterval, sampleIndex * samplingInterval, node));
                 openIntervals.push({node: node, index: index});
                 ++index;
 
@@ -1045,46 +1218,37 @@ WebInspector.CPUFlameChartDataProvider.prototype = {
         }
 
         var entryNodes = new Array(entries.length);
-        var entryColorIndexes = new Uint16Array(entries.length);
         var entryLevels = new Uint8Array(entries.length);
         var entryTotalTimes = new Float32Array(entries.length);
         var entrySelfTimes = new Float32Array(entries.length);
         var entryOffsets = new Float32Array(entries.length);
-        var entryTitles = new Array(entries.length);
-        var entryDeoptFlags = new Uint8Array(entries.length);
 
         for (var i = 0; i < entries.length; ++i) {
             var entry = entries[i];
             entryNodes[i] = entry.node;
-            entryColorIndexes[i] = colorPair.index;
             entryLevels[i] = entry.depth;
             entryTotalTimes[i] = entry.duration;
-            entrySelfTimes[i] = entry.selfTime;
             entryOffsets[i] = entry.startTime;
-            entryTitles[i] = entry.node.functionName;
-            var reason = entry.node.deoptReason;
-            entryDeoptFlags[i] = (reason && reason !== "no reason");
+            entrySelfTimes[i] = entry.selfTime;
         }
 
+        this._maxStackDepth = Math.max(maxDepth, depth);
+
         this._timelineData = {
-            maxStackDepth: Math.max(maxDepth, depth),
-            totalTime: this._cpuProfileView.profileHead.totalTime,
-            entryNodes: entryNodes,
-            entryColorIndexes: entryColorIndexes,
             entryLevels: entryLevels,
             entryTotalTimes: entryTotalTimes,
-            entrySelfTimes: entrySelfTimes,
             entryOffsets: entryOffsets,
-            colorEntryIndexes: colorEntryIndexes,
-            entryTitles: entryTitles,
-            entryDeoptFlags: entryDeoptFlags
         };
 
-        return this._timelineData;
+        this._entryNodes = entryNodes;
+        this._entrySelfTimes = entrySelfTimes;
+
+        return /** @type {!WebInspector.FlameChart.TimelineData} */ (this._timelineData);
     },
 
     /**
      * @param {number} ms
+     * @return {string}
      */
     _millisecondsToString: function(ms)
     {
@@ -1097,11 +1261,12 @@ WebInspector.CPUFlameChartDataProvider.prototype = {
 
     /**
      * @param {number} entryIndex
+     * @return {?Array.<!{title: string, text: string}>}
      */
     prepareHighlightedEntryInfo: function(entryIndex)
     {
         var timelineData = this._timelineData;
-        var node = timelineData.entryNodes[entryIndex];
+        var node = this._entryNodes[entryIndex];
         if (!node)
             return null;
 
@@ -1114,8 +1279,8 @@ WebInspector.CPUFlameChartDataProvider.prototype = {
             entryInfo.push(row);
         }
 
-        pushEntryInfoRow(WebInspector.UIString("Name"), timelineData.entryTitles[entryIndex]);
-        var selfTime = this._millisecondsToString(timelineData.entrySelfTimes[entryIndex]);
+        pushEntryInfoRow(WebInspector.UIString("Name"), node.functionName);
+        var selfTime = this._millisecondsToString(this._entrySelfTimes[entryIndex]);
         var totalTime = this._millisecondsToString(timelineData.entryTotalTimes[entryIndex]);
         pushEntryInfoRow(WebInspector.UIString("Self time"), selfTime);
         pushEntryInfoRow(WebInspector.UIString("Total time"), totalTime);
@@ -1135,18 +1300,90 @@ WebInspector.CPUFlameChartDataProvider.prototype = {
      */
     canJumpToEntry: function(entryIndex)
     {
-        return this._timelineData.entryNodes[entryIndex].scriptId !== "0";
+        return this._entryNodes[entryIndex].scriptId !== "0";
     },
 
     /**
      * @param {number} entryIndex
-     * @return {Object}
+     * @return {?string}
      */
-    entryData: function(entryIndex)
+    entryTitle: function(entryIndex)
     {
-        return this._timelineData.entryNodes[entryIndex];
+        var node = this._entryNodes[entryIndex];
+        return node.functionName;
     },
 
-    __proto__: WebInspector.FlameChartDataProvider
-}
+    /**
+     * @param {number} entryIndex
+     * @return {?string}
+     */
+    entryFont: function(entryIndex)
+    {
+        if (!this._font) {
+            this._font = (this.barHeight() - 4) + "px " + WebInspector.fontFamily();
+            this._boldFont = "bold " + this._font;
+        }
+        var node = this._entryNodes[entryIndex];
+        var reason = node.deoptReason;
+        return (reason && reason !== "no reason") ? this._boldFont : this._font;
+    },
 
+    /**
+     * @param {number} entryIndex
+     * @return {!string}
+     */
+    entryColor: function(entryIndex)
+    {
+        var node = this._entryNodes[entryIndex];
+        return this._colorGenerator.colorForID(node.functionName + ":" + node.url + ":" + node.lineNumber);;
+    },
+
+    /**
+     * @param {number} entryIndex
+     * @param {!CanvasRenderingContext2D} context
+     * @param {number} levelY
+     * @param {function(number):number} offsetToPosition
+     */
+    decorateEntry: function(entryIndex, context, levelY, offsetToPosition)
+    {
+    },
+
+    /**
+     * @param {number} entryIndex
+     * @return {boolean}
+     */
+    forceDecoration: function(entryIndex)
+    {
+        return false;
+    },
+
+    /**
+     * @param {number} entryIndex
+     * @return {!{startTimeOffset: number, endTimeOffset: number}}
+     */
+    highlightTimeRange: function(entryIndex)
+    {
+        var startTimeOffset = this._timelineData.entryOffsets[entryIndex];
+        return {
+            startTimeOffset: startTimeOffset,
+            endTimeOffset: startTimeOffset + this._timelineData.entryTotalTimes[entryIndex]
+        };
+    },
+
+    /**
+     * @return {number}
+     */
+    paddingLeft: function()
+    {
+        return 15;
+    },
+
+    /**
+     * @param {number} entryIndex
+     * @return {!string}
+     */
+    textColor: function(entryIndex)
+    {
+        return "#333";
+    }
+}

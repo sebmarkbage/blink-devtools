@@ -64,7 +64,7 @@ WebInspector.OverviewGrid.prototype = {
     },
 
     /**
-     * @param {!Array.<Element>} dividers
+     * @param {!Array.<!Element>} dividers
      */
     addEventDividers: function(dividers)
     {
@@ -117,8 +117,8 @@ WebInspector.OverviewGrid.prototype = {
 
     /**
      * @param {string} eventType
-     * @param {function(WebInspector.Event)} listener
-     * @param {Object=} thisObject
+     * @param {function(!WebInspector.Event)} listener
+     * @param {!Object=} thisObject
      */
     addEventListener: function(eventType, listener, thisObject)
     {
@@ -153,15 +153,15 @@ WebInspector.OverviewGrid.ResizerOffset = 3.5; // half pixel because offset valu
 /**
  * @constructor
  * @extends {WebInspector.Object}
- * @param {Element} parentElement
- * @param {Element} dividersLabelBarElement
+ * @param {!Element} parentElement
+ * @param {!Element} dividersLabelBarElement
  */
 WebInspector.OverviewGrid.Window = function(parentElement, dividersLabelBarElement)
 {
     this._parentElement = parentElement;
     this._dividersLabelBarElement = dividersLabelBarElement;
 
-    WebInspector.installDragHandle(this._parentElement, this._startWindowSelectorDragging.bind(this), this._windowSelectorDragging.bind(this), this._endWindowSelectorDragging.bind(this), "ew-resize");
+    WebInspector.installDragHandle(this._parentElement, this._startWindowSelectorDragging.bind(this), this._windowSelectorDragging.bind(this), this._endWindowSelectorDragging.bind(this), "ew-resize", null);
     WebInspector.installDragHandle(this._dividersLabelBarElement, this._startWindowDragging.bind(this), this._windowDragging.bind(this), null, "move");
 
     this.windowLeft = 0.0;
@@ -212,11 +212,10 @@ WebInspector.OverviewGrid.Window.prototype = {
         if (this._enabled === enabled)
             return;
         this._enabled = enabled;
-        this._parentElement.enableStyleClass("resize-enabled", enabled);
     },
 
     /**
-     * @param {Event} event
+     * @param {!Event} event
      */
     _resizerElementStartDragging: function(event)
     {
@@ -228,7 +227,7 @@ WebInspector.OverviewGrid.Window.prototype = {
     },
 
     /**
-     * @param {Event} event
+     * @param {!Event} event
      */
     _leftResizeElementDragging: function(event)
     {
@@ -237,7 +236,7 @@ WebInspector.OverviewGrid.Window.prototype = {
     },
 
     /**
-     * @param {Event} event
+     * @param {!Event} event
      */
     _rightResizeElementDragging: function(event)
     {
@@ -246,7 +245,7 @@ WebInspector.OverviewGrid.Window.prototype = {
     },
 
     /**
-     * @param {Event} event
+     * @param {!Event} event
      * @return {boolean}
      */
     _startWindowSelectorDragging: function(event)
@@ -260,7 +259,7 @@ WebInspector.OverviewGrid.Window.prototype = {
     },
 
     /**
-     * @param {Event} event
+     * @param {!Event} event
      */
     _windowSelectorDragging: function(event)
     {
@@ -269,7 +268,7 @@ WebInspector.OverviewGrid.Window.prototype = {
     },
 
     /**
-     * @param {Event} event
+     * @param {!Event} event
      */
     _endWindowSelectorDragging: function(event)
     {
@@ -289,7 +288,7 @@ WebInspector.OverviewGrid.Window.prototype = {
     },
 
     /**
-     * @param {Event} event
+     * @param {!Event} event
      * @return {boolean}
      */
     _startWindowDragging: function(event)
@@ -301,7 +300,7 @@ WebInspector.OverviewGrid.Window.prototype = {
     },
 
     /**
-     * @param {Event} event
+     * @param {!Event} event
      */
     _windowDragging: function(event)
     {
@@ -392,7 +391,7 @@ WebInspector.OverviewGrid.Window.prototype = {
     },
 
     /**
-     * @param {Event} event
+     * @param {?Event} event
      */
     _onMouseWheel: function(event)
     {
@@ -460,18 +459,6 @@ WebInspector.OverviewGrid.WindowSelector = function(parent, position)
 }
 
 WebInspector.OverviewGrid.WindowSelector.prototype = {
-    _createSelectorElement: function(parent, left, width, height)
-    {
-        var selectorElement = document.createElement("div");
-        selectorElement.className = "overview-grid-window-selector";
-        selectorElement.style.left = left + "px";
-        selectorElement.style.width = width + "px";
-        selectorElement.style.top = "0px";
-        selectorElement.style.height = height + "px";
-        parent.appendChild(selectorElement);
-        return selectorElement;
-    },
-
     _close: function(position)
     {
         position = Math.max(0, Math.min(position, this._width));

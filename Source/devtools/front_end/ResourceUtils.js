@@ -38,7 +38,7 @@ WebInspector.resourceForURL = function(url)
 }
 
 /**
- * @param {function(WebInspector.Resource)} callback
+ * @param {function(!WebInspector.Resource)} callback
  */
 WebInspector.forAllResources = function(callback)
 {
@@ -83,8 +83,8 @@ WebInspector.displayNameForURL = function(url)
 
 /**
  * @param {string} string
- * @param {function(string,string,number=,number=):Node} linkifier
- * @return {DocumentFragment}
+ * @param {function(string,string,number=,number=):!Node} linkifier
+ * @return {!DocumentFragment}
  */
 WebInspector.linkifyStringAsFragmentWithCustomLinkifier = function(string, linkifier)
 {
@@ -131,7 +131,7 @@ WebInspector.linkifyStringAsFragmentWithCustomLinkifier = function(string, linki
 
 /**
  * @param {string} string
- * @return {DocumentFragment}
+ * @return {!DocumentFragment}
  */
 WebInspector.linkifyStringAsFragment = function(string)
 {
@@ -140,7 +140,7 @@ WebInspector.linkifyStringAsFragment = function(string)
      * @param {string} url
      * @param {number=} lineNumber
      * @param {number=} columnNumber
-     * @return {Node}
+     * @return {!Node}
      */
     function linkifier(title, url, lineNumber, columnNumber)
     {
@@ -148,7 +148,6 @@ WebInspector.linkifyStringAsFragment = function(string)
         var urlNode = WebInspector.linkifyURLAsNode(url, title, undefined, isExternal);
         if (typeof lineNumber !== "undefined") {
             urlNode.lineNumber = lineNumber;
-            urlNode.preferredPanel = "sources";
             if (typeof columnNumber !== "undefined")
                 urlNode.columnNumber = columnNumber;
         }
@@ -175,7 +174,9 @@ WebInspector.linkifyURLAsNode = function(url, linkText, classes, isExternal, too
     classes += isExternal ? "webkit-html-external-link" : "webkit-html-resource-link";
 
     var a = document.createElement("a");
-    a.href = sanitizeHref(url);
+    var href = sanitizeHref(url);
+    if (href !== null)
+        a.href = href;
     a.className = classes;
     if (typeof tooltipText === "undefined")
         a.title = url;
@@ -206,7 +207,7 @@ WebInspector.formatLinkText = function(url, lineNumber)
  * @param {number=} lineNumber
  * @param {string=} classes
  * @param {string=} tooltipText
- * @return {Element}
+ * @return {!Element}
  */
 WebInspector.linkifyResourceAsNode = function(url, lineNumber, classes, tooltipText)
 {
@@ -217,19 +218,18 @@ WebInspector.linkifyResourceAsNode = function(url, lineNumber, classes, tooltipT
 }
 
 /**
- * @param {WebInspector.NetworkRequest} request
- * @return {Element}
+ * @param {!WebInspector.NetworkRequest} request
+ * @return {!Element}
  */
 WebInspector.linkifyRequestAsNode = function(request)
 {
     var anchor = WebInspector.linkifyURLAsNode(request.url);
-    anchor.preferredPanel = "network";
-    anchor.requestId  = request.requestId;
+    anchor.requestId = request.requestId;
     return anchor;
 }
 
 /**
- * @param {string} content
+ * @param {?string} content
  * @param {string} mimeType
  * @param {boolean} contentEncoded
  * @return {?string}
@@ -237,7 +237,7 @@ WebInspector.linkifyRequestAsNode = function(request)
 WebInspector.contentAsDataURL = function(content, mimeType, contentEncoded)
 {
     const maxDataUrlSize = 1024 * 1024;
-    if (content == null || content.length > maxDataUrlSize)
+    if (content === null || content.length > maxDataUrlSize)
         return null;
 
     return "data:" + mimeType + (contentEncoded ? ";base64," : ",") + content;

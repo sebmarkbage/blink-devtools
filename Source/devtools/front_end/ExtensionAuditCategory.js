@@ -30,7 +30,7 @@
 
 /**
  * @constructor
- * @extends {WebInspector.AuditCategory}
+ * @implements {WebInspector.AuditCategory}
  * @param {string} extensionOrigin
  * @param {string} id
  * @param {string} displayName
@@ -45,22 +45,28 @@ WebInspector.ExtensionAuditCategory = function(extensionOrigin, id, displayName,
 }
 
 WebInspector.ExtensionAuditCategory.prototype = {
-    // AuditCategory interface
+    /**
+     * @override
+     */
     get id()
     {
         return this._id;
     },
 
+    /**
+     * @override
+     */
     get displayName()
     {
         return this._displayName;
     },
 
     /**
-     * @param {Array.<WebInspector.NetworkRequest>} requests
-     * @param {function(WebInspector.AuditRuleResult)} ruleResultCallback
+     * @override
+     * @param {!Array.<!WebInspector.NetworkRequest>} requests
+     * @param {function(!WebInspector.AuditRuleResult)} ruleResultCallback
      * @param {function()} categoryDoneCallback
-     * @param {WebInspector.Progress} progress
+     * @param {!WebInspector.Progress} progress
      */
     run: function(requests, ruleResultCallback, categoryDoneCallback, progress)
     {
@@ -71,10 +77,10 @@ WebInspector.ExtensionAuditCategory.prototype = {
 
 /**
  * @constructor
- * @param {WebInspector.ExtensionAuditCategory} category
- * @param {function(WebInspector.AuditRuleResult)} ruleResultCallback
+ * @param {!WebInspector.ExtensionAuditCategory} category
+ * @param {function(!WebInspector.AuditRuleResult)} ruleResultCallback
  * @param {function()} categoryDoneCallback
- * @param {WebInspector.Progress} progress
+ * @param {!WebInspector.Progress} progress
  */
 WebInspector.ExtensionAuditCategoryResults = function(category, ruleResultCallback, categoryDoneCallback, progress)
 {
@@ -138,13 +144,14 @@ WebInspector.ExtensionAuditCategoryResults.prototype = {
 
     /**
      * @param {string} expression
-     * @param {function(WebInspector.RemoteObject)} callback
+     * @param {?Object} evaluateOptions
+     * @param {function(!WebInspector.RemoteObject)} callback
      */
     evaluate: function(expression, evaluateOptions, callback)
     {
         /**
          * @param {?string} error
-         * @param {?RuntimeAgent.RemoteObject} result
+         * @param {!RuntimeAgent.RemoteObject} result
          * @param {boolean=} wasThrown
          */
         function onEvaluate(error, result, wasThrown)
@@ -163,7 +170,8 @@ WebInspector.ExtensionAuditFormatters = {
      * @this {WebInspector.ExtensionAuditCategoryResults}
      * @param {string} expression
      * @param {string} title
-     * @param {Object} evaluateOptions
+     * @param {?Object} evaluateOptions
+     * @return {!Element}
      */
     object: function(expression, title, evaluateOptions)
     {
@@ -182,7 +190,8 @@ WebInspector.ExtensionAuditFormatters = {
     /**
      * @this {WebInspector.ExtensionAuditCategoryResults}
      * @param {string} expression
-     * @param {Object} evaluateOptions
+     * @param {?Object} evaluateOptions
+     * @return {!Element}
      */
     node: function(expression, evaluateOptions)
     {
@@ -194,14 +203,15 @@ WebInspector.ExtensionAuditFormatters = {
         {
             if (!nodeId)
                 return;
-            var treeOutline = new WebInspector.ElementsTreeOutline(false, false);
-            treeOutline.rootDOMNode = WebInspector.domAgent.nodeForId(nodeId);
-            treeOutline.element.addStyleClass("outline-disclosure");
-            treeOutline.setVisible(true);
-            parentElement.appendChild(treeOutline.element);
+            var node = WebInspector.domAgent.nodeForId(nodeId);
+            var renderer = WebInspector.moduleManager.instance(WebInspector.Renderer, node);
+            if (renderer)
+                parentElement.appendChild(renderer.render(node));
+            else
+                console.error("No renderer for node found");
         }
         /**
-         * @param {WebInspector.RemoteObject} remoteObject
+         * @param {!WebInspector.RemoteObject} remoteObject
          */
         function onEvaluate(remoteObject)
         {

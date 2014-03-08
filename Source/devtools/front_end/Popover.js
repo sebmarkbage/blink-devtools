@@ -31,7 +31,7 @@
 /**
  * @constructor
  * @extends {WebInspector.View}
- * @param {WebInspector.PopoverHelper=} popoverHelper
+ * @param {!WebInspector.PopoverHelper=} popoverHelper
  */
 WebInspector.Popover = function(popoverHelper)
 {
@@ -52,8 +52,8 @@ WebInspector.Popover = function(popoverHelper)
 
 WebInspector.Popover.prototype = {
     /**
-     * @param {Element} element
-     * @param {Element|AnchorBox} anchor
+     * @param {!Element} element
+     * @param {!Element|!AnchorBox} anchor
      * @param {?number=} preferredWidth
      * @param {?number=} preferredHeight
      * @param {?WebInspector.Popover.Orientation=} arrowDirection
@@ -64,8 +64,8 @@ WebInspector.Popover.prototype = {
     },
 
     /**
-     * @param {WebInspector.View} view
-     * @param {Element|AnchorBox} anchor
+     * @param {!WebInspector.View} view
+     * @param {!Element|!AnchorBox} anchor
      * @param {?number=} preferredWidth
      * @param {?number=} preferredHeight
      */
@@ -75,9 +75,9 @@ WebInspector.Popover.prototype = {
     },
 
     /**
-     * @param {WebInspector.View?} view
-     * @param {Element} contentElement
-     * @param {Element|AnchorBox} anchor
+     * @param {?WebInspector.View} view
+     * @param {!Element} contentElement
+     * @param {!Element|!AnchorBox} anchor
      * @param {?number=} preferredWidth
      * @param {?number=} preferredHeight
      * @param {?WebInspector.Popover.Orientation=} arrowDirection
@@ -134,11 +134,11 @@ WebInspector.Popover.prototype = {
     setCanShrink: function(canShrink)
     {
         this._hasFixedHeight = !canShrink;
-        this._contentDiv.addStyleClass("fixed-height");
+        this._contentDiv.classList.add("fixed-height");
     },
 
     /**
-     * @param {Element|AnchorBox} anchorElement
+     * @param {!Element|!AnchorBox} anchorElement
      * @param {number} preferredWidth
      * @param {number} preferredHeight
      * @param {?WebInspector.Popover.Orientation=} arrowDirection
@@ -153,10 +153,13 @@ WebInspector.Popover.prototype = {
 
         // Skinny tooltips are not pretty, their arrow location is not nice.
         preferredWidth = Math.max(preferredWidth, 50);
-        const totalWidth = window.innerWidth;
-        const totalHeight = window.innerHeight;
+        // Position relative to main DevTools element.
+        const container = WebInspector.Dialog.modalHostView().element;
+        const totalWidth = container.offsetWidth;
+        const totalHeight = container.offsetHeight;
 
         var anchorBox = anchorElement instanceof AnchorBox ? anchorElement : anchorElement.boxInWindow(window);
+        anchorBox = anchorBox.relativeToElement(container);
         var newElementPosition = { x: 0, y: 0, width: preferredWidth + scrollerWidth, height: preferredHeight };
 
         var verticalAlignment;
@@ -215,7 +218,7 @@ WebInspector.Popover.prototype = {
         }
 
         this.element.className = "popover custom-popup-vertical-scroll custom-popup-horizontal-scroll " + verticalAlignment + "-" + horizontalAlignment + "-arrow";
-        this.element.positionAt(newElementPosition.x - borderWidth, newElementPosition.y - borderWidth);
+        this.element.positionAt(newElementPosition.x - borderWidth, newElementPosition.y - borderWidth, container);
         this.element.style.width = newElementPosition.width + borderWidth * 2 + "px";
         this.element.style.height = newElementPosition.height + borderWidth * 2 + "px";
     },
@@ -225,9 +228,9 @@ WebInspector.Popover.prototype = {
 
 /**
  * @constructor
- * @param {Element} panelElement
- * @param {function(Element, Event):(Element|AnchorBox)|undefined} getAnchor
- * @param {function(Element, WebInspector.Popover):undefined} showPopover
+ * @param {!Element} panelElement
+ * @param {function(!Element, !Event):(!Element|!AnchorBox)|undefined} getAnchor
+ * @param {function(!Element, !WebInspector.Popover):undefined} showPopover
  * @param {function()=} onHide
  * @param {boolean=} disableOnClick
  */
@@ -251,7 +254,7 @@ WebInspector.PopoverHelper.prototype = {
     },
 
     /**
-     * @param {MouseEvent} event
+     * @param {!MouseEvent} event
      * @return {boolean}
      */
     _eventInHoverElement: function(event)
@@ -305,6 +308,9 @@ WebInspector.PopoverHelper.prototype = {
         if (!this._popover || this._hidePopoverTimer)
             return;
 
+        /**
+         * @this {WebInspector.PopoverHelper}
+         */
         function doHide()
         {
             this._hidePopover();
@@ -333,6 +339,9 @@ WebInspector.PopoverHelper.prototype = {
         }
     },
 
+    /**
+     * @return {boolean}
+     */
     isPopoverVisible: function()
     {
         return !!this._popover;
